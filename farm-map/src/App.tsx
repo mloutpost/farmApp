@@ -73,6 +73,7 @@ function App() {
   const mapRef = useRef<Map | null>(null)
   const drawRef = useRef<MapboxDraw | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
   const [boundary, setBoundary] = useState<FeatureCollection | null>(null)
@@ -315,8 +316,8 @@ function App() {
       <div className="map-panel">
         <div ref={mapContainerRef} className="map-canvas" />
 
-        <Draggable handle=".panel-header">
-          <div className="control-panel">
+        <Draggable handle=".panel-header" nodeRef={panelRef}>
+          <div ref={panelRef} className="control-panel">
             <div className="panel-header">
               <p className="control-label">Farm Boundary</p>
               <span className="panel-hint">(drag panel)</span>

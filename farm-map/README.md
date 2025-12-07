@@ -15,22 +15,23 @@ npm install
 npm run dev
 ```
 
-Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with geolocation controls, a draggable command panel, and a Windy-style HUD banner that streams CLI updates on the left and live latitude/longitude on the right.
+Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with geolocation controls, a draggable command panel, and a Windy-style HUD banner that streams timestamped CLI updates on the left and live latitude/longitude on the right.
 
 ## Sketching or Importing Farm Boundaries
 
-- Use the **My Farm** tab to upload `*.geojson` / `*.json` exports or capture a sketch with the MapLibre draw mode, then **Save sketch** to convert it into a managed layer.
-- Each upload becomes its own layer entry; double-click the name to rename it, hover to preview feature counts, click into **Layers** to adjust fill/line colors, opacity, stroke width, or hatching (solid/diagonal/cross), or delete it entirely.
+- Use the **Layers** tab to upload `*.geojson` / `*.json` exports (now resilient to newline-delimited GeoJSON) or capture a sketch with MapLibre draw mode, then **Save sketch** to convert it into a managed layer.
+- Each upload becomes its own layer entry; click it to zoom/expand an inline style panel, double-click to rename, hover (500 ms) for a stats popover, then fine-tune fill/line colors, opacity, stroke width, or hatching (solid/diagonal/cross).
 - Hovering over either the layer list or the map itself (for 500 ms) reveals configurable metadata cards so you can inspect acreage/crop details without opening another panel.
 
 ## UI Additions
 
 - 1.5-second welcome splash (`Welcome to FarmScout`) on initial load.
 - Draggable multi-tab command panel:
-  - **My Farm** – upload GeoJSON, save sketches as layers, prep future telemetry widgets.
-  - **Layers** – view a running list of uploaded/saved layers, rename on double-click, hover for feature stats, tweak styles (including hatch patterns), delete entries.
-  - **Settings** – toggle Miles/Km, switch dark/light/system theme, flip between cartographic and satellite basemaps, and configure which properties show on hover.
-- Status banner pinned to the top keeps CLI output left-aligned while right-aligning lat/long plus the four-way nav icon so MapLibre overlays never collide with the HUD.
+  - **My Farm** – sketch helpers reserved for upcoming agronomic widgets.
+  - **Layers** – intake GeoJSON, convert sketches, manage/rename layers, hover for stats, tweak styling (including hatch patterns), delete entries.
+  - **Settings** – toggle Miles/Km, switch dark/light/system theme, flip between cartographic and satellite basemaps, and configure which feature properties appear on hover.
+  - **Camera** – lock the camera to north-up (default) or free mode and register Reolink streams with GPS coordinates so camera icons/popup links appear directly on the map.
+- Status banner pinned to the top keeps timestamped CLI output left-aligned while right-aligning lat/long, ensuring MapLibre overlays never collide with the HUD.
 
 ## Next Steps
 

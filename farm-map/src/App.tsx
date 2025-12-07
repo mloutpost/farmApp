@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
-import maplibregl, { type IControl, type Map, type MapMouseEvent, type StyleSpecification, type FillLayerSpecification } from 'maplibre-gl'
+import maplibregl, {
+  type FillLayerSpecification,
+  type IControl,
+  type Map,
+  type MapMouseEvent,
+  type StyleSpecification,
+} from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import Draggable from 'react-draggable'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -46,8 +52,9 @@ const FEATURE_TOOLTIP_DELAY = 500
   zoom: number
 }
 
-type PanelPage = 'farm' | 'layers' | 'settings'
+type PanelPage = 'farm' | 'layers' | 'settings' | 'camera'
 type HatchPattern = 'solid' | 'diagonal' | 'cross'
+type CameraMode = 'north-up' | 'free'
 
 type LayerRecord = {
   id: string
@@ -73,9 +80,15 @@ type MapHoverInfo = {
   y: number
 }
 
-function formatCoord(value: number, positive: string, negative: string) {
-  return `${Math.abs(value).toFixed(3)}°${value >= 0 ? positive : negative}`
+type CameraRecord = {
+  id: string
+  name: string
+  streamUrl: string
+  lat: number
+  lng: number
 }
+
+const formatCoord = (value: number, positive: string, negative: string) => `${Math.abs(value).toFixed(3)}°${value >= 0 ? positive : negative}`
 
 function asFeatureCollection(data: FeatureCollection | Feature | FeatureCollection[] | Feature[] | null): FeatureCollection {
   if (!data) {
@@ -88,10 +101,7 @@ function asFeatureCollection(data: FeatureCollection | Feature | FeatureCollecti
   if (data.type === 'FeatureCollection') {
     return data
   }
-  return {
-    type: 'FeatureCollection',
-    features: [data],
-  }
+  return { type: 'FeatureCollection', features: [data] }
 }
 
 function extendBoundsFromGeometry(bounds: maplibregl.LngLatBounds, geometry?: Geometry | null) {
@@ -141,6 +151,11 @@ function createPatternImage(pattern: Exclude<HatchPattern, 'solid'>) {
   return ctx.getImageData(0, 0, size, size)
 }
 
+const formatTimestamp = () => {
+  const now = new Date()
+  return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 function App() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<Map | null>(null)
@@ -151,29 +166,33 @@ function App() {
   const mountedLayerIdsRef = useRef<Set<string>>(new Set())
   const layerTooltipTimerRef = useRef<number | null>(null)
   const mapHoverTimerRef = useRef<number | null>(null)
+  const cameraMarkersRef = useRef<maplibregl.Marker[]>([])
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
   const [hasSketch, setHasSketch] = useState(false)
   const [draftSketch, setDraftSketch] = useState<FeatureCollection | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [lastFileName, setLastFileName] = useState<string | null>(null)
-  const [activityMessage, setActivityMessage] = useState('Ready to chart your fields.')
+  const [activityMessage, setActivityMessage] = useState(`[${formatTimestamp()}] Ready to chart your fields.`)
   const [showSplash, setShowSplash] = useState(true)
   const [panelPage, setPanelPage] = useState<PanelPage>('farm')
   const [distanceUnit, setDistanceUnit] = useState<'mi' | 'km'>('mi')
   const [themePreference, setThemePreference] = useState<'dark' | 'light' | 'system'>('dark')
   const [baseStyle, setBaseStyle] = useState<'voyager' | 'satellite'>('voyager')
+  const [cameraMode, setCameraMode] = useState<CameraMode>('north-up')
   const [layers, setLayers] = useState<LayerRecord[]>([])
-  const [activeLayerId, setActiveLayerId] = useState<string | null>(null)
-  const [styleVersion, setStyleVersion] = useState(0)
+  const [expandedLayerId, setExpandedLayerId] = useState<string | null>(null)
   const [layerTooltip, setLayerTooltip] = useState<LayerTooltip | null>(null)
   const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [mapHoverInfo, setMapHoverInfo] = useState<MapHoverInfo | null>(null)
   const [hoverInfoFields, setHoverInfoFields] = useState<string[]>(['name', 'crop', 'acres'])
+  const [cameras, setCameras] = useState<CameraRecord[]>([])
+  const [cameraForm, setCameraForm] = useState({ name: '', streamUrl: '', lat: '', lng: '' })
+  const [styleVersion, setStyleVersion] = useState(0)
 
   const logActivity = (message: string) => {
-    setActivityMessage(message)
+    setActivityMessage(`[${formatTimestamp()}] ${message}`)
   }
 
   useEffect(() => {
@@ -208,8 +227,8 @@ function App() {
       style: BASEMAP_STYLES[baseStyle],
       center: [INITIAL_VIEW.lng, INITIAL_VIEW.lat],
       zoom: INITIAL_VIEW.zoom,
-      pitch: 35,
-      bearing: -20,
+      pitch: 0,
+      bearing: 0,
       attributionControl: false,
     })
 
@@ -285,6 +304,21 @@ function App() {
     logActivity(`Units set to ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}.`)
   }, [distanceUnit])
 
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) {
+      return
+    }
+    if (cameraMode === 'north-up') {
+      map.dragRotate.disable()
+      map.touchZoomRotate.disableRotation()
+      map.easeTo({ bearing: 0, pitch: 0, duration: 600 })
+    } else {
+      map.dragRotate.enable()
+      map.touchZoomRotate.enableRotation()
+    }
+  }, [cameraMode])
+
   const ensurePatternImage = useCallback((map: Map, pattern: HatchPattern) => {
     if (pattern === 'solid') {
       return
@@ -294,7 +328,7 @@ function App() {
       return
     }
     const imageData = createPatternImage(pattern)
-    map.addImage(imageId, imageData)
+    map.addImage(imageId, imageData, { pixelRatio: 2 })
   }, [])
 
   const renderLayersOnMap = useCallback(() => {
@@ -326,12 +360,7 @@ function App() {
         fillPaint['fill-pattern'] = `hatch-${layer.hatchPattern}`
       }
 
-      map.addLayer({
-        id: `${layer.id}-fill`,
-        type: 'fill',
-        source: sourceId,
-        paint: fillPaint,
-      })
+      map.addLayer({ id: `${layer.id}-fill`, type: 'fill', source: sourceId, paint: fillPaint })
       map.addLayer({
         id: `${layer.id}-line`,
         type: 'line',
@@ -356,6 +385,32 @@ function App() {
       map.once('load', renderLayersOnMap)
     }
   }, [renderLayersOnMap, styleVersion])
+
+  const renderCamerasOnMap = useCallback(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+    cameraMarkersRef.current.forEach((marker) => marker.remove())
+    cameraMarkersRef.current = cameras.map((camera) => {
+      const el = document.createElement('div')
+      el.className = 'camera-marker'
+      el.innerHTML = '📷'
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([camera.lng, camera.lat])
+        .setPopup(
+          new maplibregl.Popup({ offset: 16 }).setHTML(
+            `<strong>${camera.name}</strong><br/><a href="${camera.streamUrl}" target="_blank" rel="noreferrer">Open stream</a>`
+          ),
+        )
+        .addTo(map)
+      return marker
+    })
+  }, [cameras])
+
+  useEffect(() => {
+    renderCamerasOnMap()
+  }, [renderCamerasOnMap, styleVersion])
 
   const fitToCollection = (collection: FeatureCollection) => {
     if (!collection.features.length || !mapRef.current) {
@@ -386,7 +441,7 @@ function App() {
       hatchPattern: 'solid',
     }
     setLayers((prev) => [...prev, newLayer])
-    setActiveLayerId(newLayer.id)
+    setExpandedLayerId(newLayer.id)
     logActivity(`Layer "${newLayer.name}" added.`)
     fitToCollection(data)
   }
@@ -470,8 +525,8 @@ function App() {
 
   const handleLayerDelete = (layerId: string) => {
     setLayers((prev) => prev.filter((layer) => layer.id !== layerId))
-    if (activeLayerId === layerId) {
-      setActiveLayerId(null)
+    if (expandedLayerId === layerId) {
+      setExpandedLayerId(null)
     }
     logActivity('Layer removed.')
   }
@@ -489,14 +544,14 @@ function App() {
     setRenamingLayerId(null)
   }
 
+  const handleLayerClick = (layer: LayerRecord) => {
+    const nextExpanded = expandedLayerId === layer.id ? null : layer.id
+    setExpandedLayerId(nextExpanded)
+    fitToCollection(layer.data)
+  }
+
   const latLabel = formatCoord(viewState.lat, 'N', 'S')
   const lngLabel = formatCoord(viewState.lng, 'E', 'W')
-  const activeLayer = useMemo(() => {
-    if (activeLayerId) {
-      return layers.find((layer) => layer.id === activeLayerId) ?? null
-    }
-    return layers[0] ?? null
-  }, [activeLayerId, layers])
 
   const handleLayerMouseEnter = (layer: LayerRecord, event: React.MouseEvent<HTMLButtonElement>) => {
     if (layerTooltipTimerRef.current) {
@@ -540,9 +595,11 @@ function App() {
       }
       const features = map.queryRenderedFeatures(event.point, { layers: hoverLayerIds })
       if (!features.length) {
+        map.getCanvas().style.cursor = ''
         setMapHoverInfo(null)
         return
       }
+      map.getCanvas().style.cursor = 'help'
       const containerRect = mapContainerRef.current?.getBoundingClientRect()
       const x = event.point.x + (containerRect?.left ?? 0)
       const y = event.point.y + (containerRect?.top ?? 0)
@@ -556,6 +613,7 @@ function App() {
         window.clearTimeout(mapHoverTimerRef.current)
         mapHoverTimerRef.current = null
       }
+      map.getCanvas().style.cursor = ''
       setMapHoverInfo(null)
     }
 
@@ -568,24 +626,42 @@ function App() {
     }
   }, [hoverLayerIds])
 
+  const handleAddCamera = () => {
+    if (!cameraForm.name || !cameraForm.streamUrl || !cameraForm.lat || !cameraForm.lng) {
+      return
+    }
+    const lat = Number(cameraForm.lat)
+    const lng = Number(cameraForm.lng)
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return
+    }
+    const newCamera: CameraRecord = {
+      id: `cam-${Date.now()}`,
+      name: cameraForm.name,
+      streamUrl: cameraForm.streamUrl,
+      lat,
+      lng,
+    }
+    setCameras((prev) => [...prev, newCamera])
+    setCameraForm({ name: '', streamUrl: '', lat: '', lng: '' })
+    logActivity(`Camera "${newCamera.name}" registered.`)
+  }
+
+  const handleRemoveCamera = (cameraId: string) => {
+    setCameras((prev) => prev.filter((camera) => camera.id !== cameraId))
+    logActivity('Camera removed.')
+  }
+
+  const handleFocusCamera = (camera: CameraRecord) => {
+    if (!mapRef.current) {
+      return
+    }
+    mapRef.current.easeTo({ center: [camera.lng, camera.lat], zoom: 16, duration: 800 })
+  }
+
   const renderFarmPage = () => (
     <>
-      <p className="panel-subtext">
-        {layers.length ? `${layers.length} layer${layers.length === 1 ? '' : 's'} tracked.` : 'Add a GeoJSON or sketch to begin.'}
-      </p>
-      <div className="panel-section">
-        <p className="panel-section-label">Intake</p>
-        <div className="control-actions">
-          <button type="button" onClick={handleUploadClick} disabled={isUploading}>
-            {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
-          </button>
-          <button type="button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
-            Save sketch
-          </button>
-        </div>
-        <input ref={fileInputRef} type="file" accept=".geojson,.json" className="sr-only" onChange={handleFileChange} />
-        {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
-      </div>
+      <p className="panel-subtext">A high-level summary pane reserved for future agronomic widgets.</p>
       <div className="panel-section">
         <p className="panel-section-label">Sketch tools</p>
         <div className="control-actions">
@@ -606,103 +682,128 @@ function App() {
     </>
   )
 
+  const renderLayerIntake = () => (
+    <div className="panel-section">
+      <p className="panel-section-label">Intake</p>
+      <div className="control-actions">
+        <button type="button" onClick={handleUploadClick} disabled={isUploading}>
+          {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
+        </button>
+        <button type="button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
+          Save sketch
+        </button>
+      </div>
+      <input ref={fileInputRef} type="file" accept=".geojson,.json" className="sr-only" onChange={handleFileChange} />
+      {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+    </div>
+  )
+
   const renderLayersPage = () => (
     <div className="layers-page">
+      {renderLayerIntake()}
       <div className="layer-list">
         {layers.length === 0 ? (
           <p className="empty-state">No layers yet. Upload GeoJSON to add one.</p>
         ) : (
-          layers.map((layer) => (
-            <button
-              key={layer.id}
-              type="button"
-              className={layer.id === activeLayer?.id ? 'layer-row active' : 'layer-row'}
-              onClick={() => setActiveLayerId(layer.id)}
-              onDoubleClick={() => beginRename(layer)}
-              onMouseEnter={(event) => handleLayerMouseEnter(layer, event)}
-              onMouseLeave={handleLayerMouseLeave}
-            >
-              {renamingLayerId === layer.id ? (
-                <input
-                  autoFocus
-                  value={renameDraft}
-                  onChange={(event) => setRenameDraft(event.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      commitRename()
-                    } else if (event.key === 'Escape') {
-                      setRenamingLayerId(null)
-                    }
-                  }}
-                />
-              ) : (
-                <span>{layer.name}</span>
-              )}
-              <small>{layer.data.features.length} feature{layer.data.features.length === 1 ? '' : 's'}</small>
-            </button>
-          ))
+          layers.map((layer) => {
+            const expanded = expandedLayerId === layer.id
+            return (
+              <div key={layer.id} className={`layer-block ${expanded ? 'expanded' : ''}`}>
+                <button
+                  type="button"
+                  className={expanded ? 'layer-row active info-hover' : 'layer-row info-hover'}
+                  onClick={() => handleLayerClick(layer)}
+                  onDoubleClick={() => beginRename(layer)}
+                  onMouseEnter={(event) => handleLayerMouseEnter(layer, event)}
+                  onMouseLeave={handleLayerMouseLeave}
+                >
+                  {renamingLayerId === layer.id ? (
+                    <input
+                      autoFocus
+                      value={renameDraft}
+                      onChange={(event) => setRenameDraft(event.target.value)}
+                      onBlur={commitRename}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          commitRename()
+                        } else if (event.key === 'Escape') {
+                          setRenamingLayerId(null)
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span>{layer.name}</span>
+                  )}
+                  <small>{layer.data.features.length} feature{layer.data.features.length === 1 ? '' : 's'}</small>
+                </button>
+                {expanded ? (
+                  <div className="layer-editor">
+                    <div className="style-row">
+                      <label>
+                        Fill
+                        <input
+                          type="color"
+                          value={layer.fillColor}
+                          onChange={(event) => handleLayerStyleChange(layer.id, { fillColor: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Line
+                        <input
+                          type="color"
+                          value={layer.lineColor}
+                          onChange={(event) => handleLayerStyleChange(layer.id, { lineColor: event.target.value })}
+                        />
+                      </label>
+                    </div>
+                    <div className="style-row sliders">
+                      <label>
+                        Fill opacity
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={layer.fillOpacity}
+                          onChange={(event) => handleLayerStyleChange(layer.id, { fillOpacity: Number(event.target.value) })}
+                        />
+                      </label>
+                      <label>
+                        Line width
+                        <input
+                          type="range"
+                          min="1"
+                          max="8"
+                          step="0.5"
+                          value={layer.lineWidth}
+                          onChange={(event) => handleLayerStyleChange(layer.id, { lineWidth: Number(event.target.value) })}
+                        />
+                      </label>
+                    </div>
+                    <label className="selector">
+                      Hatching
+                      <select
+                        value={layer.hatchPattern}
+                        onChange={(event) => handleLayerStyleChange(layer.id, { hatchPattern: event.target.value as HatchPattern })}
+                      >
+                        <option value="solid">Solid</option>
+                        <option value="diagonal">Diagonal</option>
+                        <option value="cross">Cross</option>
+                      </select>
+                    </label>
+                    <button type="button" className="danger-button" onClick={() => handleLayerDelete(layer.id)}>
+                      Delete layer
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })
         )}
       </div>
-      {activeLayer ? (
-        <div className="layer-editor">
-          <p className="panel-section-label">Style overrides</p>
-          <div className="style-row">
-            <label>
-              Fill
-              <input
-                type="color"
-                value={activeLayer.fillColor}
-                onChange={(event) => handleLayerStyleChange(activeLayer.id, { fillColor: event.target.value })}
-              />
-            </label>
-            <label>
-              Line
-              <input
-                type="color"
-                value={activeLayer.lineColor}
-                onChange={(event) => handleLayerStyleChange(activeLayer.id, { lineColor: event.target.value })}
-              />
-            </label>
-          </div>
-          <div className="style-row sliders">
-            <label>
-              Fill opacity
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={activeLayer.fillOpacity}
-                onChange={(event) => handleLayerStyleChange(activeLayer.id, { fillOpacity: Number(event.target.value) })}
-              />
-            </label>
-            <label>
-              Line width
-              <input
-                type="range"
-                min="1"
-                max="8"
-                step="0.5"
-                value={activeLayer.lineWidth}
-                onChange={(event) => handleLayerStyleChange(activeLayer.id, { lineWidth: Number(event.target.value) })}
-              />
-            </label>
-          </div>
-          <label className="selector">
-            Hatching
-            <select
-              value={activeLayer.hatchPattern}
-              onChange={(event) => handleLayerStyleChange(activeLayer.id, { hatchPattern: event.target.value as HatchPattern })}
-            >
-              <option value="solid">Solid</option>
-              <option value="diagonal">Diagonal</option>
-              <option value="cross">Cross</option>
-            </select>
-          </label>
-          <button type="button" className="danger-button" onClick={() => handleLayerDelete(activeLayer.id)}>
-            Delete layer
-          </button>
+      {layerTooltip && layerTooltip.id ? (
+        <div className="layer-tooltip" style={{ left: layerTooltip.x, top: layerTooltip.y }}>
+          {layerTooltip.details}
         </div>
       ) : null}
     </div>
@@ -764,12 +865,89 @@ function App() {
     </div>
   )
 
+  const renderCameraPage = () => (
+    <div className="panel-section stack">
+      <div>
+        <p className="panel-section-label">Camera orientation</p>
+        <div className="segmented">
+          <button type="button" className={cameraMode === 'north-up' ? 'active' : ''} onClick={() => setCameraMode('north-up')}>
+            North-up
+          </button>
+          <button type="button" className={cameraMode === 'free' ? 'active' : ''} onClick={() => setCameraMode('free')}>
+            Free roam
+          </button>
+        </div>
+      </div>
+      <div>
+        <p className="panel-section-label">Add Reolink stream</p>
+        <input
+          className="text-input"
+          placeholder="Camera name"
+          value={cameraForm.name}
+          onChange={(event) => setCameraForm((prev) => ({ ...prev, name: event.target.value }))}
+        />
+        <input
+          className="text-input"
+          placeholder="Stream URL (RTSP/HTTPS)"
+          value={cameraForm.streamUrl}
+          onChange={(event) => setCameraForm((prev) => ({ ...prev, streamUrl: event.target.value }))}
+        />
+        <div className="style-row">
+          <input
+            className="text-input"
+            placeholder="Latitude"
+            value={cameraForm.lat}
+            onChange={(event) => setCameraForm((prev) => ({ ...prev, lat: event.target.value }))}
+          />
+          <input
+            className="text-input"
+            placeholder="Longitude"
+            value={cameraForm.lng}
+            onChange={(event) => setCameraForm((prev) => ({ ...prev, lng: event.target.value }))}
+          />
+        </div>
+        <button type="button" onClick={handleAddCamera}>
+          Add camera
+        </button>
+      </div>
+      <div>
+        <p className="panel-section-label">Cameras</p>
+        {cameras.length === 0 ? (
+          <p className="empty-state">No cameras yet.</p>
+        ) : (
+          cameras.map((camera) => (
+            <div key={camera.id} className="camera-row">
+              <div>
+                <p>{camera.name}</p>
+                <small>{camera.lat.toFixed(4)}, {camera.lng.toFixed(4)}</small>
+              </div>
+              <div className="camera-actions">
+                <button type="button" onClick={() => handleFocusCamera(camera)}>
+                  Focus
+                </button>
+                <a href={camera.streamUrl} target="_blank" rel="noreferrer">
+                  Stream
+                </a>
+                <button type="button" onClick={() => handleRemoveCamera(camera.id)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+
   const renderPanelContent = () => {
     if (panelPage === 'layers') {
       return renderLayersPage()
     }
     if (panelPage === 'settings') {
       return renderSettingsPage()
+    }
+    if (panelPage === 'camera') {
+      return renderCameraPage()
     }
     return renderFarmPage()
   }
@@ -779,20 +957,22 @@ function App() {
       return null
     }
     const properties = mapHoverInfo.feature.properties ?? {}
-    const rows = hoverInfoFields.map((field) => {
-      const value = properties?.[field]
-      if (value === undefined || value === null) {
-        return null
-      }
-      return (
-        <div key={field}>
-          <span className="hover-key">{field}</span>
-          <span className="hover-value">{String(value)}</span>
-        </div>
-      )
-    })
+    const rows = hoverInfoFields
+      .map((field) => {
+        const value = properties?.[field]
+        if (value === undefined || value === null) {
+          return null
+        }
+        return (
+          <div key={field}>
+            <span className="hover-key">{field}</span>
+            <span className="hover-value">{String(value)}</span>
+          </div>
+        )
+      })
+      .filter(Boolean)
 
-    if (rows.every((row) => row === null)) {
+    if (!rows.length) {
       return null
     }
 
@@ -817,7 +997,6 @@ function App() {
       <div className="status-bar">
         <span className="status-message">&gt; {activityMessage}</span>
         <span className="status-coords">
-          <span className="hud-icon">✥</span>
           {latLabel} · {lngLabel}
         </span>
       </div>
@@ -829,13 +1008,14 @@ function App() {
           <div ref={panelRef} className="control-panel">
             <div className="panel-header">
               <button type="button" className="panel-drag-handle" aria-label="Drag panel">
-                <span aria-hidden="true">⋮</span>
+                <span aria-hidden="true">⤧</span>
               </button>
               <div className="panel-tabs">
                 {[
                   { id: 'farm', label: 'My Farm' },
                   { id: 'layers', label: 'Layers' },
                   { id: 'settings', label: 'Settings' },
+                  { id: 'camera', label: 'Camera' },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -849,7 +1029,7 @@ function App() {
               </div>
             </div>
             <div className="panel-body">{renderPanelContent()}</div>
-            {layerTooltip && layerTooltip.id ? (
+            {panelPage === 'layers' && layerTooltip ? (
               <div className="layer-tooltip" style={{ left: layerTooltip.x, top: layerTooltip.y }}>
                 {layerTooltip.details}
               </div>

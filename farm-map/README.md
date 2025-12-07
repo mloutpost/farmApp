@@ -19,16 +19,17 @@ Visit the printed URL (default `http://localhost:5173`) and you will see an inte
 
 ## Sketching or Importing Farm Boundaries
 
-- Use the **Draw**/**Finish** buttons (or the Mapbox Draw polygon tool) inside the floating panel to sketch acreage directly on the map.
+- Use the **Draw**/**Finish** buttons (or the hidden Mapbox Draw polygon tool) inside the floating panel to sketch acreage directly on the map.
 - Click **Upload GeoJSON** and drop in `*.geojson` / `*.json` exports from QGIS, ArcGIS, etc.
 - After each action the camera auto-fits, the CLI ticker along the bottom summarizes the action, and you can drag the panel to any corner.
-- Customize the boundary styling live via the panel (fill color/opacity, line color/width).
+- Customize the boundary styling via the **Layers** tab (fill color, opacity, line color, line width) and monitor live latitude/longitude from the bottom-right HUD.
 
 ## UI Additions
 
 - Three-second welcome splash (`Welcome to FarmScout`) on initial load.
-- Draggable boundary command panel that shows camera info and controls drawing/importing/styling.
+- Draggable multi-tab command panel (Home for draw/upload, Layers for styling, Settings for units + theme).
 - Terminal-style ticker anchored to the bottom that streams the latest activity message.
+- Coordinate badge at the bottom-right that mirrors Windy-style HUDs.
 
 ## Next Steps
 

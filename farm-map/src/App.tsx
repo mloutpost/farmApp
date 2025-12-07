@@ -24,6 +24,8 @@ type ViewState = {
   zoom: number
 }
 
+type PanelPage = 'home' | 'settings' | 'layers'
+
 function formatCoord(value: number, positive: string, negative: string) {
   return `${Math.abs(value).toFixed(3)}°${value >= 0 ? positive : negative}`
 }
@@ -74,6 +76,7 @@ function App() {
   const drawRef = useRef<MapboxDraw | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const scaleControlRef = useRef<maplibregl.ScaleControl | null>(null)
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
   const [boundary, setBoundary] = useState<FeatureCollection | null>(null)
@@ -86,6 +89,9 @@ function App() {
   const [fillOpacity, setFillOpacity] = useState(0.18)
   const [lineWidth, setLineWidth] = useState(2)
   const [showSplash, setShowSplash] = useState(true)
+  const [activePanelPage, setActivePanelPage] = useState<PanelPage>('home')
+  const [distanceUnit, setDistanceUnit] = useState<'mi' | 'km'>('mi')
+  const [themePreference, setThemePreference] = useState<'dark' | 'light' | 'system'>('dark')
 
   const logActivity = (message: string) => {
     setActivityMessage(message)
@@ -95,6 +101,23 @@ function App() {
     const timer = setTimeout(() => setShowSplash(false), 3000)
     return () => clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (themePreference === 'system') {
+      const media = window.matchMedia('(prefers-color-scheme: dark)')
+      const apply = () => {
+        root.setAttribute('data-theme', media.matches ? 'dark' : 'light')
+      }
+      apply()
+      media.addEventListener('change', apply)
+      return () => media.removeEventListener('change', apply)
+    }
+    root.setAttribute('data-theme', themePreference)
+    return () => {
+      root.removeAttribute('data-theme')
+    }
+  }, [themePreference])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
@@ -114,7 +137,9 @@ function App() {
     mapRef.current = mapInstance
 
     mapInstance.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
-    mapInstance.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-left')
+    const scaleControl = new maplibregl.ScaleControl({ unit: distanceUnit === 'mi' ? 'imperial' : 'metric' })
+    mapInstance.addControl(scaleControl, 'bottom-left')
+    scaleControlRef.current = scaleControl
     mapInstance.addControl(
       new maplibregl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
@@ -210,6 +235,7 @@ function App() {
       mapInstance.remove()
       mapRef.current = null
       drawRef.current = null
+      scaleControlRef.current = null
     }
   }, [])
 
@@ -299,8 +325,147 @@ function App() {
     updateBoundaryStyle()
   }, [fillColor, fillOpacity, lineColor, lineWidth])
 
+  useEffect(() => {
+    if (!scaleControlRef.current) {
+      return
+    }
+    const unit = distanceUnit === 'mi' ? 'imperial' : 'metric'
+    scaleControlRef.current.setUnit(unit)
+    logActivity(`Units set to ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}.`)
+  }, [distanceUnit])
+
   const latLabel = formatCoord(viewState.lat, 'N', 'S')
   const lngLabel = formatCoord(viewState.lng, 'E', 'W')
+
+  const renderHomePage = () => (
+    <>
+      <p className="panel-subtext">{boundary ? `${boundary.features.length} feature(s) loaded.` : 'Sketch or upload to begin.'}</p>
+      <div className="panel-section">
+        <p className="panel-section-label">Actions</p>
+        <div className="control-actions">
+          <button type="button" onClick={handleStartDrawing}>
+            Draw
+          </button>
+          <button type="button" onClick={handleFinishDrawing}>
+            Finish
+          </button>
+          <button type="button" onClick={handleClearBoundary} disabled={!boundary && !hasSketch}>
+            Clear
+          </button>
+        </div>
+        <div className="control-actions">
+          <button type="button" onClick={handleUploadClick} disabled={isUploading}>
+            {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".geojson,.json"
+          className="sr-only"
+          onChange={handleFileChange}
+        />
+        {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+      </div>
+    </>
+  )
+
+  const renderSettingsPage = () => (
+    <div className="panel-section stack">
+      <div>
+        <p className="panel-section-label">Units</p>
+        <div className="segmented">
+          <button type="button" className={distanceUnit === 'mi' ? 'active' : ''} onClick={() => setDistanceUnit('mi')}>
+            Miles
+          </button>
+          <button type="button" className={distanceUnit === 'km' ? 'active' : ''} onClick={() => setDistanceUnit('km')}>
+            Km
+          </button>
+        </div>
+      </div>
+      <div>
+        <p className="panel-section-label">Theme</p>
+        <div className="segmented triple">
+          <button
+            type="button"
+            className={themePreference === 'dark' ? 'active' : ''}
+            onClick={() => setThemePreference('dark')}
+          >
+            Dark
+          </button>
+          <button
+            type="button"
+            className={themePreference === 'light' ? 'active' : ''}
+            onClick={() => setThemePreference('light')}
+          >
+            Light
+          </button>
+          <button
+            type="button"
+            className={themePreference === 'system' ? 'active' : ''}
+            onClick={() => setThemePreference('system')}
+          >
+            System
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderLayersPage = () => (
+    <div className="panel-section layers">
+      <div className="layer-item active">
+        <div>
+          <p>Field Boundary</p>
+          <span>GeoJSON overlay</span>
+        </div>
+      </div>
+      <div className="style-row">
+        <label>
+          Fill
+          <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} />
+        </label>
+        <label>
+          Line
+          <input type="color" value={lineColor} onChange={(event) => setLineColor(event.target.value)} />
+        </label>
+      </div>
+      <div className="style-row sliders">
+        <label>
+          Fill opacity
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={fillOpacity}
+            onChange={(event) => setFillOpacity(Number(event.target.value))}
+          />
+        </label>
+        <label>
+          Line width
+          <input
+            type="range"
+            min="1"
+            max="8"
+            step="0.5"
+            value={lineWidth}
+            onChange={(event) => setLineWidth(Number(event.target.value))}
+          />
+        </label>
+      </div>
+    </div>
+  )
+
+  const renderPanelContent = () => {
+    if (activePanelPage === 'settings') {
+      return renderSettingsPage()
+    }
+    if (activePanelPage === 'layers') {
+      return renderLayersPage()
+    }
+    return renderHomePage()
+  }
 
   return (
     <div className="app-shell">
@@ -316,89 +481,37 @@ function App() {
       <div className="map-panel">
         <div ref={mapContainerRef} className="map-canvas" />
 
-        <Draggable handle=".panel-header" nodeRef={panelRef}>
+        <Draggable handle=".panel-drag-handle" nodeRef={panelRef}>
           <div ref={panelRef} className="control-panel">
             <div className="panel-header">
-              <p className="control-label">Farm Boundary</p>
-              <span className="panel-hint">(drag panel)</span>
-            </div>
-            <p className="control-subtext">
-              {boundary ? `${boundary.features.length} feature(s) loaded.` : 'Sketch or upload to begin.'}
-            </p>
-            <div className="panel-section">
-              <p className="panel-section-label">Camera</p>
-              <p className="panel-coords">
-                {latLabel} · {lngLabel} · z{viewState.zoom.toFixed(1)}
-              </p>
-            </div>
-
-            <div className="panel-section">
-              <p className="panel-section-label">Actions</p>
-              <div className="control-actions">
-                <button type="button" onClick={handleStartDrawing}>
-                  Draw
-                </button>
-                <button type="button" onClick={handleFinishDrawing}>
-                  Finish
-                </button>
-                <button type="button" onClick={handleClearBoundary} disabled={!boundary && !hasSketch}>
-                  Clear
-                </button>
-              </div>
-              <div className="control-actions">
-                <button type="button" onClick={handleUploadClick} disabled={isUploading}>
-                  {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
-                </button>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".geojson,.json"
-                className="sr-only"
-                onChange={handleFileChange}
-              />
-              {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
-            </div>
-
-            <div className="panel-section">
-              <p className="panel-section-label">Style</p>
-              <div className="style-row">
-                <label>
-                  Fill
-                  <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} />
-                </label>
-                <label>
-                  Line
-                  <input type="color" value={lineColor} onChange={(event) => setLineColor(event.target.value)} />
-                </label>
-              </div>
-              <div className="style-row sliders">
-                <label>
-                  Fill opacity
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={fillOpacity}
-                    onChange={(event) => setFillOpacity(Number(event.target.value))}
-                  />
-                </label>
-                <label>
-                  Line width
-                  <input
-                    type="range"
-                    min="1"
-                    max="8"
-                    step="0.5"
-                    value={lineWidth}
-                    onChange={(event) => setLineWidth(Number(event.target.value))}
-                  />
-                </label>
+              <button type="button" className="panel-drag-handle" aria-label="Drag panel">
+                <span aria-hidden="true">⤧</span>
+              </button>
+              <div className="panel-tabs">
+                {[
+                  { id: 'home', label: 'Home' },
+                  { id: 'layers', label: 'Layers' },
+                  { id: 'settings', label: 'Settings' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={activePanelPage === (tab.id as PanelPage) ? 'active' : ''}
+                    onClick={() => setActivePanelPage(tab.id as PanelPage)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
+            <div className="panel-body">{renderPanelContent()}</div>
           </div>
         </Draggable>
+
+        <div className="coords-badge">
+          <span>{latLabel}</span>
+          <span>{lngLabel}</span>
+        </div>
       </div>
 
       <div className="activity-ticker">

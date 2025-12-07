@@ -17,6 +17,14 @@ npm run dev
 
 Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with navigation, scale, and geolocation controls.
 
+## Sketching or Importing Farm Boundaries
+
+- Use the draw tool (polygon + trash icons in the upper-left of the map) to sketch fields right on the basemap. Every vertex updates live, and the boundary fills with an aqua overlay.
+- Or click **Upload boundary** and drop in:
+  - `*.geojson` or `*.json` files exported from QGIS/ArcGIS
+  - Zipped ESRI Shapefiles (`.zip`) that bundle `.shp/.dbf/.shx` companions
+- Imported features are rendered instantly and the camera zooms to fit the acreage. Use **Clear** to reset the layer.
+
 ## Next Steps
 
 - Import your QGIS layers (GeoJSON/Shapefile) and draw them as custom MapLibre sources.

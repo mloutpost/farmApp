@@ -77,3 +77,82 @@
   color: #a4b6d1;
   font-size: 0.85rem;
 }
+
+.control-panel {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 6;
+  width: 320px;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.25rem;
+  background: rgba(1, 5, 14, 0.85);
+  border: 1px solid rgba(118, 179, 255, 0.25);
+  box-shadow: 0 12px 30px rgba(3, 9, 20, 0.65);
+  backdrop-filter: blur(18px);
+}
+
+.control-label {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: #8ecbff;
+}
+
+.control-subtext {
+  margin: 0.35rem 0 1rem;
+  color: #cfe1ff;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.control-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.control-actions button {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(18, 52, 85, 0.85);
+  color: #f3f6ff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.control-actions button:hover:enabled {
+  transform: translateY(-1px);
+  border-color: rgba(130, 197, 255, 0.7);
+}
+
+.control-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-line {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: #c9d9f8;
+}
+
+.status-subline {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  color: #8ea2c6;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

@@ -3,7 +3,6 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource, type IControl, type Map } from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import Draggable from 'react-draggable'
-import shp from 'shpjs'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import './App.css'
@@ -251,7 +250,7 @@ function App() {
       setHasSketch(false)
     } catch (error) {
       console.error(error)
-      logActivity('Unable to read that file. Please upload GeoJSON or a zipped shapefile.')
+      logActivity('Unable to read that file. Please upload a valid GeoJSON.')
     } finally {
       setIsUploading(false)
       event.target.value = ''
@@ -347,13 +346,13 @@ function App() {
               </div>
               <div className="control-actions">
                 <button type="button" onClick={handleUploadClick} disabled={isUploading}>
-                  {isUploading ? 'Uploading…' : 'Upload GeoJSON/ZIP'}
+                  {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
                 </button>
               </div>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".geojson,.json,.zip,.shp"
+                accept=".geojson,.json"
                 className="sr-only"
                 onChange={handleFileChange}
               />
@@ -413,11 +412,6 @@ async function readGeospatialFile(file: File): Promise<FeatureCollection> {
   if (extension === 'geojson' || extension === 'json') {
     const text = await file.text()
     return asFeatureCollection(JSON.parse(text))
-  }
-  if (extension === 'zip' || extension === 'shp') {
-    const buffer = await file.arrayBuffer()
-    const result = await shp(buffer)
-    return asFeatureCollection(result)
   }
   throw new Error('Unsupported file type')
 }

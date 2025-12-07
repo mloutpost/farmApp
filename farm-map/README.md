@@ -20,9 +20,7 @@ Visit the printed URL (default `http://localhost:5173`) and you will see an inte
 ## Sketching or Importing Farm Boundaries
 
 - Use the **Draw**/**Finish** buttons (or the Mapbox Draw polygon tool) inside the floating panel to sketch acreage directly on the map.
-- Click **Upload GeoJSON/ZIP** and drop in:
-  - `*.geojson` / `*.json` exports from QGIS, ArcGIS, etc.
-  - Zipped ESRI Shapefiles (`.zip`) that bundle `.shp/.dbf/.shx`
+- Click **Upload GeoJSON** and drop in `*.geojson` / `*.json` exports from QGIS, ArcGIS, etc.
 - After each action the camera auto-fits, the CLI ticker along the bottom summarizes the action, and you can drag the panel to any corner.
 - Customize the boundary styling live via the panel (fill color/opacity, line color/width).
 
@@ -34,6 +32,6 @@ Visit the printed URL (default `http://localhost:5173`) and you will see an inte
 
 ## Next Steps
 
-- Import your QGIS layers (GeoJSON/Shapefile) and draw them as custom MapLibre sources.
+- Import your QGIS GeoJSON layers and draw them as custom MapLibre sources.
 - Add farm-specific overlays (plantings, soil tests, scouting notes) via React panels.
 - Connect to an API (AppSync, API Gateway, or FastAPI) for persistence and analytics.

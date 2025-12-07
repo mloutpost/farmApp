@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource, type IControl, type Map } from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
+import Draggable from 'react-draggable'
 import shp from 'shpjs'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
@@ -76,10 +77,24 @@ function App() {
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
   const [boundary, setBoundary] = useState<FeatureCollection | null>(null)
-  const [status, setStatus] = useState('Draw or upload a field boundary to begin.')
   const [isUploading, setIsUploading] = useState(false)
   const [lastFileName, setLastFileName] = useState<string | null>(null)
   const [hasSketch, setHasSketch] = useState(false)
+  const [activityMessage, setActivityMessage] = useState('Ready to chart your fields.')
+  const [fillColor, setFillColor] = useState('#7fffd4')
+  const [lineColor, setLineColor] = useState('#7fffd4')
+  const [fillOpacity, setFillOpacity] = useState(0.18)
+  const [lineWidth, setLineWidth] = useState(2)
+  const [showSplash, setShowSplash] = useState(true)
+
+  const logActivity = (message: string) => {
+    setActivityMessage(message)
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 3000)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) {
@@ -105,7 +120,7 @@ function App() {
         positionOptions: { enableHighAccuracy: true },
         trackUserLocation: true,
       }),
-      'top-left',
+      'bottom-left',
     )
     mapInstance.addControl(new maplibregl.AttributionControl({ compact: true }))
 
@@ -131,8 +146,8 @@ function App() {
         type: 'fill',
         source: BOUNDARY_SOURCE_ID,
         paint: {
-          'fill-color': '#7fffd4',
-          'fill-opacity': 0.18,
+          'fill-color': fillColor,
+          'fill-opacity': fillOpacity,
         },
       })
       mapInstance.addLayer({
@@ -140,8 +155,8 @@ function App() {
         type: 'line',
         source: BOUNDARY_SOURCE_ID,
         paint: {
-          'line-color': '#7fffd4',
-          'line-width': 2,
+          'line-color': lineColor,
+          'line-width': lineWidth,
         },
       })
     }
@@ -166,13 +181,13 @@ function App() {
         setHasSketch(Boolean(collection.features.length))
         if (!collection.features.length) {
           setBoundary(null)
-          setStatus('Draw or upload a field boundary to begin.')
           syncBoundaryOnMap(null)
+          logActivity('Sketch cleared.')
           return
         }
         setBoundary(collection)
-        setStatus(`Sketch captured (${collection.features.length} feature${collection.features.length > 1 ? 's' : ''}).`)
         syncBoundaryOnMap(collection)
+        logActivity(`Sketch captured (${collection.features.length} feature${collection.features.length > 1 ? 's' : ''}).`)
         if (options?.shouldFit) {
           fitToCollection(collection)
         }
@@ -224,19 +239,19 @@ function App() {
       return
     }
     setIsUploading(true)
-    setStatus(`Loading ${file.name}...`)
+    logActivity(`Loading ${file.name}...`)
     try {
       const parsed = await readGeospatialFile(file)
       setBoundary(parsed)
       syncBoundaryOnMap(parsed)
       fitToCollection(parsed)
       drawRef.current?.deleteAll()
-      setStatus(`Imported ${parsed.features.length} feature${parsed.features.length !== 1 ? 's' : ''} from ${file.name}.`)
+      logActivity(`Imported ${parsed.features.length} feature${parsed.features.length !== 1 ? 's' : ''} from ${file.name}.`)
       setLastFileName(file.name)
       setHasSketch(false)
     } catch (error) {
       console.error(error)
-      setStatus('Unable to read that file. Please upload GeoJSON or a zipped shapefile.')
+      logActivity('Unable to read that file. Please upload GeoJSON or a zipped shapefile.')
     } finally {
       setIsUploading(false)
       event.target.value = ''
@@ -245,61 +260,149 @@ function App() {
 
   const handleClearBoundary = () => {
     setBoundary(null)
-    setStatus('Draw or upload a field boundary to begin.')
     drawRef.current?.deleteAll()
     syncBoundaryOnMap(null)
     setHasSketch(false)
+    logActivity('Boundary reset.')
   }
 
   const handleUploadClick = () => {
     fileInputRef.current?.click()
   }
 
+  const handleStartDrawing = () => {
+    drawRef.current?.changeMode('draw_polygon')
+    logActivity('Draw mode activated.')
+  }
+
+  const handleFinishDrawing = () => {
+    drawRef.current?.changeMode('simple_select')
+    logActivity('Draw mode exited.')
+  }
+
+  const updateBoundaryStyle = () => {
+    const map = mapRef.current
+    if (!map) {
+      return
+    }
+    if (map.getLayer(BOUNDARY_FILL_LAYER_ID)) {
+      map.setPaintProperty(BOUNDARY_FILL_LAYER_ID, 'fill-color', fillColor)
+      map.setPaintProperty(BOUNDARY_FILL_LAYER_ID, 'fill-opacity', fillOpacity)
+    }
+    if (map.getLayer(BOUNDARY_LINE_LAYER_ID)) {
+      map.setPaintProperty(BOUNDARY_LINE_LAYER_ID, 'line-color', lineColor)
+      map.setPaintProperty(BOUNDARY_LINE_LAYER_ID, 'line-width', lineWidth)
+    }
+  }
+
+  useEffect(() => {
+    updateBoundaryStyle()
+  }, [fillColor, fillOpacity, lineColor, lineWidth])
+
   const latLabel = formatCoord(viewState.lat, 'N', 'S')
   const lngLabel = formatCoord(viewState.lng, 'E', 'W')
 
   return (
     <div className="app-shell">
-      <div className="floating-header">
-        <h1>Farm Scout</h1>
-        <p>Windy-style base map to start plotting acreage, yields, and passes.</p>
-      </div>
+      {showSplash ? (
+        <div className="splash-screen">
+          <div className="splash-content">
+            <p>Welcome to</p>
+            <h1>FarmScout</h1>
+          </div>
+        </div>
+      ) : null}
 
       <div className="map-panel">
         <div ref={mapContainerRef} className="map-canvas" />
 
-        <div className="hud-card">
-          <div>
-            <p className="hud-label">Camera</p>
-            <p className="hud-values">
-              {latLabel} · {lngLabel} · z{viewState.zoom.toFixed(1)}
+        <Draggable handle=".panel-header">
+          <div className="control-panel">
+            <div className="panel-header">
+              <p className="control-label">Farm Boundary</p>
+              <span className="panel-hint">(drag panel)</span>
+            </div>
+            <p className="control-subtext">
+              {boundary ? `${boundary.features.length} feature(s) loaded.` : 'Sketch or upload to begin.'}
             </p>
-          </div>
-          <p className="hud-subtext">Pan, tilt, zoom, draw, or geolocate to inspect any field.</p>
-        </div>
+            <div className="panel-section">
+              <p className="panel-section-label">Camera</p>
+              <p className="panel-coords">
+                {latLabel} · {lngLabel} · z{viewState.zoom.toFixed(1)}
+              </p>
+            </div>
 
-        <div className="control-panel">
-          <p className="control-label">Farm boundary</p>
-          <p className="control-subtext">Sketch on the map or upload GeoJSON / zipped shapefiles.</p>
+            <div className="panel-section">
+              <p className="panel-section-label">Actions</p>
+              <div className="control-actions">
+                <button type="button" onClick={handleStartDrawing}>
+                  Draw
+                </button>
+                <button type="button" onClick={handleFinishDrawing}>
+                  Finish
+                </button>
+                <button type="button" onClick={handleClearBoundary} disabled={!boundary && !hasSketch}>
+                  Clear
+                </button>
+              </div>
+              <div className="control-actions">
+                <button type="button" onClick={handleUploadClick} disabled={isUploading}>
+                  {isUploading ? 'Uploading…' : 'Upload GeoJSON/ZIP'}
+                </button>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".geojson,.json,.zip,.shp"
+                className="sr-only"
+                onChange={handleFileChange}
+              />
+              {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+            </div>
 
-          <div className="control-actions">
-            <button type="button" onClick={handleUploadClick} disabled={isUploading}>
-              {isUploading ? 'Uploading…' : 'Upload boundary'}
-            </button>
-            <button type="button" onClick={handleClearBoundary} disabled={!boundary && !hasSketch}>
-              Clear
-            </button>
+            <div className="panel-section">
+              <p className="panel-section-label">Style</p>
+              <div className="style-row">
+                <label>
+                  Fill
+                  <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} />
+                </label>
+                <label>
+                  Line
+                  <input type="color" value={lineColor} onChange={(event) => setLineColor(event.target.value)} />
+                </label>
+              </div>
+              <div className="style-row sliders">
+                <label>
+                  Fill opacity
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={fillOpacity}
+                    onChange={(event) => setFillOpacity(Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  Line width
+                  <input
+                    type="range"
+                    min="1"
+                    max="8"
+                    step="0.5"
+                    value={lineWidth}
+                    onChange={(event) => setLineWidth(Number(event.target.value))}
+                  />
+                </label>
+              </div>
+            </div>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".geojson,.json,.zip,.shp"
-            className="sr-only"
-            onChange={handleFileChange}
-          />
-          <p className="status-line">{status}</p>
-          {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
-        </div>
+        </Draggable>
+      </div>
+
+      <div className="activity-ticker">
+        <span>&gt; {activityMessage}</span>
       </div>
     </div>
   )

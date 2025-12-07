@@ -15,15 +15,22 @@ npm install
 npm run dev
 ```
 
-Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with navigation, scale, and geolocation controls.
+Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with navigation, scale, geolocation controls, and a draggable command panel.
 
 ## Sketching or Importing Farm Boundaries
 
-- Use the draw tool (polygon + trash icons in the upper-left of the map) to sketch fields right on the basemap. Every vertex updates live, and the boundary fills with an aqua overlay.
-- Or click **Upload boundary** and drop in:
-  - `*.geojson` or `*.json` files exported from QGIS/ArcGIS
-  - Zipped ESRI Shapefiles (`.zip`) that bundle `.shp/.dbf/.shx` companions
-- Imported features are rendered instantly and the camera zooms to fit the acreage. Use **Clear** to reset the layer.
+- Use the **Draw**/**Finish** buttons (or the Mapbox Draw polygon tool) inside the floating panel to sketch acreage directly on the map.
+- Click **Upload GeoJSON/ZIP** and drop in:
+  - `*.geojson` / `*.json` exports from QGIS, ArcGIS, etc.
+  - Zipped ESRI Shapefiles (`.zip`) that bundle `.shp/.dbf/.shx`
+- After each action the camera auto-fits, the CLI ticker along the bottom summarizes the action, and you can drag the panel to any corner.
+- Customize the boundary styling live via the panel (fill color/opacity, line color/width).
+
+## UI Additions
+
+- Three-second welcome splash (`Welcome to FarmScout`) on initial load.
+- Draggable boundary command panel that shows camera info and controls drawing/importing/styling.
+- Terminal-style ticker anchored to the bottom that streams the latest activity message.
 
 ## Next Steps
 

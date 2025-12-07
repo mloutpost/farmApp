@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
-import maplibregl, { type IControl, type Map } from 'maplibre-gl'
+import maplibregl, { type IControl, type Map, type MapMouseEvent, type StyleSpecification, type FillLayerSpecification } from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import Draggable from 'react-draggable'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import './App.css'
 
-const BASEMAP_STYLES = {
+const BASEMAP_STYLES: Record<'voyager' | 'satellite', string | StyleSpecification> = {
   voyager: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
   satellite: {
-    version: 8 as 8,
+    version: 8,
     glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
     sources: {
       'esri-satellite': {
-        type: 'raster' as const,
+        type: 'raster',
         tiles: ['https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
         tileSize: 256,
         attribution: '© Esri, Maxar, Earthstar Geographics',
@@ -23,7 +23,7 @@ const BASEMAP_STYLES = {
     layers: [
       {
         id: 'esri-satellite-layer',
-        type: 'raster' as const,
+        type: 'raster',
         source: 'esri-satellite',
       },
     ],
@@ -37,14 +37,17 @@ const INITIAL_VIEW = {
 }
 
 const COLOR_PALETTE = ['#7fffd4', '#ffb347', '#7dd3fc', '#f472b6', '#c084fc', '#facc15']
+const LAYER_TOOLTIP_DELAY = 500
+const FEATURE_TOOLTIP_DELAY = 500
 
-type ViewState = {
+ type ViewState = {
   lng: number
   lat: number
   zoom: number
 }
 
 type PanelPage = 'farm' | 'layers' | 'settings'
+type HatchPattern = 'solid' | 'diagonal' | 'cross'
 
 type LayerRecord = {
   id: string
@@ -54,19 +57,33 @@ type LayerRecord = {
   lineColor: string
   fillOpacity: number
   lineWidth: number
+  hatchPattern: HatchPattern
+}
+
+type LayerTooltip = {
+  id: string
+  x: number
+  y: number
+  details: string
+}
+
+type MapHoverInfo = {
+  feature: Feature
+  x: number
+  y: number
 }
 
 function formatCoord(value: number, positive: string, negative: string) {
   return `${Math.abs(value).toFixed(3)}°${value >= 0 ? positive : negative}`
 }
 
-function asFeatureCollection(data: FeatureCollection | Feature | FeatureCollection[] | null): FeatureCollection {
+function asFeatureCollection(data: FeatureCollection | Feature | FeatureCollection[] | Feature[] | null): FeatureCollection {
   if (!data) {
     return { type: 'FeatureCollection', features: [] }
   }
   if (Array.isArray(data)) {
-    const features = data.flatMap((collection) => collection.features ?? [])
-    return { type: 'FeatureCollection', features }
+    const features = data.flatMap((item) => (item.type === 'FeatureCollection' ? item.features ?? [] : item))
+    return { type: 'FeatureCollection', features: features as Feature[] }
   }
   if (data.type === 'FeatureCollection') {
     return data
@@ -97,6 +114,33 @@ function extendBoundsFromGeometry(bounds: maplibregl.LngLatBounds, geometry?: Ge
   extendCoords(geometry.coordinates)
 }
 
+function createPatternImage(pattern: Exclude<HatchPattern, 'solid'>) {
+  const size = 8
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('Unable to create pattern context')
+  }
+  ctx.strokeStyle = 'white'
+  ctx.lineWidth = 1
+  ctx.clearRect(0, 0, size, size)
+  if (pattern === 'diagonal') {
+    ctx.beginPath()
+    ctx.moveTo(0, size)
+    ctx.lineTo(size, 0)
+    ctx.stroke()
+  } else if (pattern === 'cross') {
+    ctx.beginPath()
+    ctx.moveTo(0, size / 2)
+    ctx.lineTo(size, size / 2)
+    ctx.moveTo(size / 2, 0)
+    ctx.lineTo(size / 2, size)
+    ctx.stroke()
+  }
+  return ctx.getImageData(0, 0, size, size)
+}
+
 function App() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<Map | null>(null)
@@ -105,10 +149,12 @@ function App() {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const scaleControlRef = useRef<maplibregl.ScaleControl | null>(null)
   const mountedLayerIdsRef = useRef<Set<string>>(new Set())
+  const layerTooltipTimerRef = useRef<number | null>(null)
+  const mapHoverTimerRef = useRef<number | null>(null)
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
-  const [draftSketch, setDraftSketch] = useState<FeatureCollection | null>(null)
   const [hasSketch, setHasSketch] = useState(false)
+  const [draftSketch, setDraftSketch] = useState<FeatureCollection | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [lastFileName, setLastFileName] = useState<string | null>(null)
   const [activityMessage, setActivityMessage] = useState('Ready to chart your fields.')
@@ -120,14 +166,19 @@ function App() {
   const [layers, setLayers] = useState<LayerRecord[]>([])
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null)
   const [styleVersion, setStyleVersion] = useState(0)
+  const [layerTooltip, setLayerTooltip] = useState<LayerTooltip | null>(null)
+  const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [mapHoverInfo, setMapHoverInfo] = useState<MapHoverInfo | null>(null)
+  const [hoverInfoFields, setHoverInfoFields] = useState<string[]>(['name', 'crop', 'acres'])
 
   const logActivity = (message: string) => {
     setActivityMessage(message)
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 3000)
-    return () => clearTimeout(timer)
+    const timer = window.setTimeout(() => setShowSplash(false), 1500)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -187,11 +238,7 @@ function App() {
 
     const updateView = () => {
       const center = mapInstance.getCenter()
-      setViewState({
-        lng: center.lng,
-        lat: center.lat,
-        zoom: mapInstance.getZoom(),
-      })
+      setViewState({ lng: center.lng, lat: center.lat, zoom: mapInstance.getZoom() })
     }
 
     const refreshFromDraw = () => {
@@ -210,13 +257,12 @@ function App() {
     mapInstance.on('load', updateView)
 
     return () => {
-      mapInstance.off('move', updateView)
       mapInstance.remove()
       mapRef.current = null
       drawRef.current = null
       scaleControlRef.current = null
     }
-  }, [baseStyle])
+  }, [])
 
   useEffect(() => {
     const map = mapRef.current
@@ -224,21 +270,32 @@ function App() {
       return
     }
     map.setStyle(BASEMAP_STYLES[baseStyle])
-    map.once('styledata', () => setStyleVersion((version) => version + 1))
-    logActivity(`Basemap switched to ${baseStyle === 'voyager' ? 'cartographic' : 'satellite'} mode.`)
+    map.once('styledata', () => {
+      setStyleVersion((version) => version + 1)
+      logActivity(`Basemap switched to ${baseStyle === 'voyager' ? 'cartographic' : 'satellite'} mode.`)
+    })
   }, [baseStyle])
 
   useEffect(() => {
-    const map = mapRef.current
-    if (!map) {
+    if (!scaleControlRef.current) {
       return
     }
     const unit = distanceUnit === 'mi' ? 'imperial' : 'metric'
-    if (scaleControlRef.current) {
-      scaleControlRef.current.setUnit(unit)
-    }
+    scaleControlRef.current.setUnit(unit)
     logActivity(`Units set to ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}.`)
   }, [distanceUnit])
+
+  const ensurePatternImage = useCallback((map: Map, pattern: HatchPattern) => {
+    if (pattern === 'solid') {
+      return
+    }
+    const imageId = `hatch-${pattern}`
+    if (map.hasImage(imageId)) {
+      return
+    }
+    const imageData = createPatternImage(pattern)
+    map.addImage(imageId, imageData)
+  }, [])
 
   const renderLayersOnMap = useCallback(() => {
     const map = mapRef.current
@@ -259,14 +316,21 @@ function App() {
     layers.forEach((layer) => {
       const sourceId = `${layer.id}-source`
       map.addSource(sourceId, { type: 'geojson', data: layer.data })
+
+      const fillPaint: FillLayerSpecification['paint'] = {
+        'fill-color': layer.fillColor,
+        'fill-opacity': layer.fillOpacity,
+      }
+      if (layer.hatchPattern !== 'solid') {
+        ensurePatternImage(map, layer.hatchPattern)
+        fillPaint['fill-pattern'] = `hatch-${layer.hatchPattern}`
+      }
+
       map.addLayer({
         id: `${layer.id}-fill`,
         type: 'fill',
         source: sourceId,
-        paint: {
-          'fill-color': layer.fillColor,
-          'fill-opacity': layer.fillOpacity,
-        },
+        paint: fillPaint,
       })
       map.addLayer({
         id: `${layer.id}-line`,
@@ -279,7 +343,7 @@ function App() {
       })
       mountedLayerIdsRef.current.add(layer.id)
     })
-  }, [layers])
+  }, [ensurePatternImage, layers])
 
   useEffect(() => {
     const map = mapRef.current
@@ -291,7 +355,7 @@ function App() {
     } else {
       map.once('load', renderLayersOnMap)
     }
-  }, [layers, renderLayersOnMap, styleVersion])
+  }, [renderLayersOnMap, styleVersion])
 
   const fitToCollection = (collection: FeatureCollection) => {
     if (!collection.features.length || !mapRef.current) {
@@ -317,13 +381,35 @@ function App() {
       data,
       fillColor: COLOR_PALETTE[index % COLOR_PALETTE.length],
       lineColor: '#ffffff',
-      fillOpacity: 0.2,
+      fillOpacity: 0.25,
       lineWidth: 2,
+      hatchPattern: 'solid',
     }
     setLayers((prev) => [...prev, newLayer])
     setActiveLayerId(newLayer.id)
     logActivity(`Layer "${newLayer.name}" added.`)
     fitToCollection(data)
+  }
+
+  const parseGeojsonFile = async (file: File): Promise<FeatureCollection> => {
+    const text = await file.text()
+    try {
+      return asFeatureCollection(JSON.parse(text))
+    } catch (error) {
+      const ndjsonFeatures: Feature[] = []
+      const lines = text.split(/\r?\n/)
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) {
+          continue
+        }
+        ndjsonFeatures.push(JSON.parse(trimmed))
+      }
+      if (!ndjsonFeatures.length) {
+        throw error
+      }
+      return asFeatureCollection(ndjsonFeatures)
+    }
   }
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -334,8 +420,7 @@ function App() {
     setIsUploading(true)
     logActivity(`Loading ${file.name}...`)
     try {
-      const text = await file.text()
-      const parsed = asFeatureCollection(JSON.parse(text))
+      const parsed = await parseGeojsonFile(file)
       addLayerFromData(parsed, file.name)
       setLastFileName(file.name)
     } catch (error) {
@@ -391,9 +476,97 @@ function App() {
     logActivity('Layer removed.')
   }
 
+  const beginRename = (layer: LayerRecord) => {
+    setRenamingLayerId(layer.id)
+    setRenameDraft(layer.name)
+  }
+
+  const commitRename = () => {
+    if (!renamingLayerId) {
+      return
+    }
+    setLayers((prev) => prev.map((layer) => (layer.id === renamingLayerId ? { ...layer, name: renameDraft || layer.name } : layer)))
+    setRenamingLayerId(null)
+  }
+
   const latLabel = formatCoord(viewState.lat, 'N', 'S')
   const lngLabel = formatCoord(viewState.lng, 'E', 'W')
-  const activeLayer = activeLayerId ? layers.find((layer) => layer.id === activeLayerId) ?? null : layers[0] ?? null
+  const activeLayer = useMemo(() => {
+    if (activeLayerId) {
+      return layers.find((layer) => layer.id === activeLayerId) ?? null
+    }
+    return layers[0] ?? null
+  }, [activeLayerId, layers])
+
+  const handleLayerMouseEnter = (layer: LayerRecord, event: React.MouseEvent<HTMLButtonElement>) => {
+    if (layerTooltipTimerRef.current) {
+      window.clearTimeout(layerTooltipTimerRef.current)
+    }
+    const rect = panelRef.current?.getBoundingClientRect()
+    const tooltipX = event.clientX - (rect?.left ?? 0)
+    const tooltipY = event.clientY - (rect?.top ?? 0)
+    layerTooltipTimerRef.current = window.setTimeout(() => {
+      setLayerTooltip({
+        id: layer.id,
+        x: tooltipX,
+        y: tooltipY,
+        details: `${layer.name}: ${layer.data.features.length} feature${layer.data.features.length === 1 ? '' : 's'}`,
+      })
+    }, LAYER_TOOLTIP_DELAY)
+  }
+
+  const handleLayerMouseLeave = () => {
+    if (layerTooltipTimerRef.current) {
+      window.clearTimeout(layerTooltipTimerRef.current)
+      layerTooltipTimerRef.current = null
+    }
+    setLayerTooltip(null)
+  }
+
+  const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill`, `${layer.id}-line`]), [layers])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) {
+      return
+    }
+
+    const handleMouseMove = (event: MapMouseEvent) => {
+      if (!hoverLayerIds.length) {
+        return
+      }
+      if (mapHoverTimerRef.current) {
+        window.clearTimeout(mapHoverTimerRef.current)
+      }
+      const features = map.queryRenderedFeatures(event.point, { layers: hoverLayerIds })
+      if (!features.length) {
+        setMapHoverInfo(null)
+        return
+      }
+      const containerRect = mapContainerRef.current?.getBoundingClientRect()
+      const x = event.point.x + (containerRect?.left ?? 0)
+      const y = event.point.y + (containerRect?.top ?? 0)
+      mapHoverTimerRef.current = window.setTimeout(() => {
+        setMapHoverInfo({ feature: features[0], x, y })
+      }, FEATURE_TOOLTIP_DELAY)
+    }
+
+    const clearHover = () => {
+      if (mapHoverTimerRef.current) {
+        window.clearTimeout(mapHoverTimerRef.current)
+        mapHoverTimerRef.current = null
+      }
+      setMapHoverInfo(null)
+    }
+
+    map.on('mousemove', handleMouseMove)
+    map.on('mouseout', clearHover)
+
+    return () => {
+      map.off('mousemove', handleMouseMove)
+      map.off('mouseout', clearHover)
+    }
+  }, [hoverLayerIds])
 
   const renderFarmPage = () => (
     <>
@@ -443,10 +616,29 @@ function App() {
             <button
               key={layer.id}
               type="button"
-              className={layer.id === activeLayerId ? 'layer-row active' : 'layer-row'}
+              className={layer.id === activeLayer?.id ? 'layer-row active' : 'layer-row'}
               onClick={() => setActiveLayerId(layer.id)}
+              onDoubleClick={() => beginRename(layer)}
+              onMouseEnter={(event) => handleLayerMouseEnter(layer, event)}
+              onMouseLeave={handleLayerMouseLeave}
             >
-              <span>{layer.name}</span>
+              {renamingLayerId === layer.id ? (
+                <input
+                  autoFocus
+                  value={renameDraft}
+                  onChange={(event) => setRenameDraft(event.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      commitRename()
+                    } else if (event.key === 'Escape') {
+                      setRenamingLayerId(null)
+                    }
+                  }}
+                />
+              ) : (
+                <span>{layer.name}</span>
+              )}
               <small>{layer.data.features.length} feature{layer.data.features.length === 1 ? '' : 's'}</small>
             </button>
           ))
@@ -497,6 +689,17 @@ function App() {
               />
             </label>
           </div>
+          <label className="selector">
+            Hatching
+            <select
+              value={activeLayer.hatchPattern}
+              onChange={(event) => handleLayerStyleChange(activeLayer.id, { hatchPattern: event.target.value as HatchPattern })}
+            >
+              <option value="solid">Solid</option>
+              <option value="diagonal">Diagonal</option>
+              <option value="cross">Cross</option>
+            </select>
+          </label>
           <button type="button" className="danger-button" onClick={() => handleLayerDelete(activeLayer.id)}>
             Delete layer
           </button>
@@ -543,6 +746,21 @@ function App() {
           </button>
         </div>
       </div>
+      <div>
+        <p className="panel-section-label">Hover fields</p>
+        <input
+          className="text-input"
+          value={hoverInfoFields.join(', ')}
+          onChange={(event) => {
+            const fields = event.target.value
+              .split(',')
+              .map((item) => item.trim())
+              .filter(Boolean)
+            setHoverInfoFields(fields.length ? fields : ['name'])
+          }}
+        />
+        <small className="status-subline">Comma-separated property keys shown on hover.</small>
+      </div>
     </div>
   )
 
@@ -556,6 +774,35 @@ function App() {
     return renderFarmPage()
   }
 
+  const renderMapHoverInfo = () => {
+    if (!mapHoverInfo) {
+      return null
+    }
+    const properties = mapHoverInfo.feature.properties ?? {}
+    const rows = hoverInfoFields.map((field) => {
+      const value = properties?.[field]
+      if (value === undefined || value === null) {
+        return null
+      }
+      return (
+        <div key={field}>
+          <span className="hover-key">{field}</span>
+          <span className="hover-value">{String(value)}</span>
+        </div>
+      )
+    })
+
+    if (rows.every((row) => row === null)) {
+      return null
+    }
+
+    return (
+      <div className="map-hover-card" style={{ left: mapHoverInfo.x + 12, top: mapHoverInfo.y + 12 }}>
+        {rows}
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       {showSplash ? (
@@ -567,6 +814,14 @@ function App() {
         </div>
       ) : null}
 
+      <div className="status-bar">
+        <span className="status-message">&gt; {activityMessage}</span>
+        <span className="status-coords">
+          <span className="hud-icon">✥</span>
+          {latLabel} · {lngLabel}
+        </span>
+      </div>
+
       <div className="map-panel">
         <div ref={mapContainerRef} className="map-canvas" />
 
@@ -574,7 +829,7 @@ function App() {
           <div ref={panelRef} className="control-panel">
             <div className="panel-header">
               <button type="button" className="panel-drag-handle" aria-label="Drag panel">
-                <span aria-hidden="true">⤢</span>
+                <span aria-hidden="true">⋮</span>
               </button>
               <div className="panel-tabs">
                 {[
@@ -594,20 +849,15 @@ function App() {
               </div>
             </div>
             <div className="panel-body">{renderPanelContent()}</div>
+            {layerTooltip && layerTooltip.id ? (
+              <div className="layer-tooltip" style={{ left: layerTooltip.x, top: layerTooltip.y }}>
+                {layerTooltip.details}
+              </div>
+            ) : null}
           </div>
         </Draggable>
 
-        <div className="coords-badge">
-          <span>{latLabel}</span>
-          <span>{lngLabel}</span>
-        </div>
-        <div className="pan-indicator" aria-hidden="true">
-          <span>✥</span>
-        </div>
-      </div>
-
-      <div className="activity-ticker">
-        <span>&gt; {activityMessage}</span>
+        {renderMapHoverInfo()}
       </div>
     </div>
   )

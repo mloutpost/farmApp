@@ -18,12 +18,53 @@
   height: 100%;
 }
 
+.status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 1rem;
+  background: rgba(2, 7, 14, 0.92);
+  border-bottom: 1px solid rgba(77, 125, 173, 0.4);
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
+}
+
+.status-message {
+  color: #9dffb0;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-coords {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hud-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+}
+
 .control-panel {
   position: absolute;
-  top: 2rem;
+  top: 4rem;
   left: 2rem;
   z-index: 6;
-  width: 320px;
+  width: 340px;
   padding: 1.25rem 1.5rem;
   border-radius: 1.25rem;
   background: var(--panel-bg);
@@ -41,10 +82,10 @@
 .panel-drag-handle {
   border: 1px solid var(--panel-border);
   background: transparent;
-  color: var(--accent);
+  color: var(--text-muted);
   border-radius: 999px;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -265,6 +306,16 @@
   gap: 0.75rem;
 }
 
+.selector select {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
 .danger-button {
   margin-top: 0.5rem;
   border-radius: 0.75rem;
@@ -275,59 +326,70 @@
   cursor: pointer;
 }
 
+.layer-row input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.4rem;
+  padding: 0.2rem 0.4rem;
+  color: var(--text-primary);
+}
+
 .empty-state {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
 
-.coords-badge {
-  position: absolute;
-  top: 4.5rem;
-  right: 1.5rem;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  padding: 0.5rem 0.9rem;
-  font-size: 0.85rem;
-  display: flex;
-  gap: 0.75rem;
-  letter-spacing: 0.05em;
-  color: var(--text-primary);
-}
-
-.pan-indicator {
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  border: 1px dashed rgba(255, 255, 255, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-primary);
-  opacity: 0.65;
-}
-
-.activity-ticker {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(2, 7, 14, 0.9);
-  border-top: 1px solid rgba(77, 125, 173, 0.4);
-  color: #9dffb0;
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
-  font-size: 0.9rem;
-  padding: 0.4rem 1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .mapboxgl-ctrl-top-left {
   display: none !important;
+}
+
+.layer-tooltip {
+  position: absolute;
+  padding: 0.4rem 0.6rem;
+  background: rgba(2, 7, 14, 0.9);
+  border: 1px solid rgba(118, 179, 255, 0.3);
+  border-radius: 0.4rem;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  pointer-events: none;
+  transform: translate(-50%, -110%);
+}
+
+.map-hover-card {
+  position: fixed;
+  z-index: 7;
+  min-width: 180px;
+  padding: 0.6rem 0.8rem;
+  background: rgba(1, 6, 14, 0.92);
+  border: 1px solid rgba(118, 179, 255, 0.35);
+  border-radius: 0.75rem;
+  color: #f3f6ff;
+  font-size: 0.8rem;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.map-hover-card .hover-key {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-right: 0.3rem;
+  font-size: 0.7rem;
+}
+
+.map-hover-card .hover-value {
+  color: var(--text-primary);
+}
+
+.text-input {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  margin-top: 0.4rem;
 }
 
 .splash-screen {
@@ -364,11 +426,9 @@
   .activity-ticker {
     font-size: 0.8rem;
   }
-  .coords-badge,
-  .pan-indicator {
-    right: 1rem;
-  }
-  .coords-badge {
-    top: 4rem;
+  .status-bar {
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: flex-start;
   }
 }

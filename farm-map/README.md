@@ -15,23 +15,22 @@ npm install
 npm run dev
 ```
 
-Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with scale/geolocation controls, a draggable command panel, and HUD elements inspired by Windy/MarineTraffic.
+Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with geolocation controls, a draggable command panel, and a Windy-style HUD banner that streams CLI updates on the left and live latitude/longitude on the right.
 
 ## Sketching or Importing Farm Boundaries
 
 - Use the **My Farm** tab to upload `*.geojson` / `*.json` exports or capture a sketch with the MapLibre draw mode, then **Save sketch** to convert it into a managed layer.
-- Each upload becomes its own layer entry; click any layer to adjust fill/line colors, opacity, or stroke width, or delete it entirely.
-- A one-line CLI ticker summarizes every action, while the live latitude/longitude badge in the upper-right mirrors pro weather UIs.
+- Each upload becomes its own layer entry; double-click the name to rename it, hover to preview feature counts, click into **Layers** to adjust fill/line colors, opacity, stroke width, or hatching (solid/diagonal/cross), or delete it entirely.
+- Hovering over either the layer list or the map itself (for 500 ms) reveals configurable metadata cards so you can inspect acreage/crop details without opening another panel.
 
 ## UI Additions
 
-- Three-second welcome splash (`Welcome to FarmScout`) on initial load.
+- 1.5-second welcome splash (`Welcome to FarmScout`) on initial load.
 - Draggable multi-tab command panel:
-  - **My Farm** – upload GeoJSON, manage sketches, prep future telemetry widgets.
-  - **Layers** – view a running list of uploaded/saved layers, edit style, delete entries.
-  - **Settings** – toggle Miles/Km, switch dark/light/system theme, or flip between cartographic and satellite basemaps.
-- Terminal-style ticker anchored to the bottom that streams the latest activity message.
-- Coordinate badge in the upper-right plus a four-way pan indicator in place of the default MapLibre controls.
+  - **My Farm** – upload GeoJSON, save sketches as layers, prep future telemetry widgets.
+  - **Layers** – view a running list of uploaded/saved layers, rename on double-click, hover for feature stats, tweak styles (including hatch patterns), delete entries.
+  - **Settings** – toggle Miles/Km, switch dark/light/system theme, flip between cartographic and satellite basemaps, and configure which properties show on hover.
+- Status banner pinned to the top keeps CLI output left-aligned while right-aligning lat/long plus the four-way nav icon so MapLibre overlays never collide with the HUD.
 
 ## Next Steps
 

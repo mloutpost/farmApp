@@ -15,21 +15,23 @@ npm install
 npm run dev
 ```
 
-Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with navigation, scale, geolocation controls, and a draggable command panel.
+Visit the printed URL (default `http://localhost:5173`) and you will see an interactive globe-inspired map with scale/geolocation controls, a draggable command panel, and HUD elements inspired by Windy/MarineTraffic.
 
 ## Sketching or Importing Farm Boundaries
 
-- Use the **Draw**/**Finish** buttons (or the hidden Mapbox Draw polygon tool) inside the floating panel to sketch acreage directly on the map.
-- Click **Upload GeoJSON** and drop in `*.geojson` / `*.json` exports from QGIS, ArcGIS, etc.
-- After each action the camera auto-fits, the CLI ticker along the bottom summarizes the action, and you can drag the panel to any corner.
-- Customize the boundary styling via the **Layers** tab (fill color, opacity, line color, line width) and monitor live latitude/longitude from the bottom-right HUD.
+- Use the **My Farm** tab to upload `*.geojson` / `*.json` exports or capture a sketch with the MapLibre draw mode, then **Save sketch** to convert it into a managed layer.
+- Each upload becomes its own layer entry; click any layer to adjust fill/line colors, opacity, or stroke width, or delete it entirely.
+- A one-line CLI ticker summarizes every action, while the live latitude/longitude badge in the upper-right mirrors pro weather UIs.
 
 ## UI Additions
 
 - Three-second welcome splash (`Welcome to FarmScout`) on initial load.
-- Draggable multi-tab command panel (Home for draw/upload, Layers for styling, Settings for units + theme).
+- Draggable multi-tab command panel:
+  - **My Farm** – upload GeoJSON, manage sketches, prep future telemetry widgets.
+  - **Layers** – view a running list of uploaded/saved layers, edit style, delete entries.
+  - **Settings** – toggle Miles/Km, switch dark/light/system theme, or flip between cartographic and satellite basemaps.
 - Terminal-style ticker anchored to the bottom that streams the latest activity message.
-- Coordinate badge at the bottom-right that mirrors Windy-style HUDs.
+- Coordinate badge in the upper-right plus a four-way pan indicator in place of the default MapLibre controls.
 
 ## Next Steps
 

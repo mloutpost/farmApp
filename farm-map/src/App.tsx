@@ -1,11 +1,34 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
-import maplibregl, { type GeoJSONSource, type IControl, type Map } from 'maplibre-gl'
+import maplibregl, { type IControl, type Map } from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import Draggable from 'react-draggable'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import './App.css'
+
+const BASEMAP_STYLES = {
+  voyager: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+  satellite: {
+    version: 8 as 8,
+    glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
+    sources: {
+      'esri-satellite': {
+        type: 'raster' as const,
+        tiles: ['https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256,
+        attribution: '© Esri, Maxar, Earthstar Geographics',
+      },
+    },
+    layers: [
+      {
+        id: 'esri-satellite-layer',
+        type: 'raster' as const,
+        source: 'esri-satellite',
+      },
+    ],
+  },
+}
 
 const INITIAL_VIEW = {
   lng: -95.7129,
@@ -13,10 +36,7 @@ const INITIAL_VIEW = {
   zoom: 4.25,
 }
 
-const BOUNDARY_SOURCE_ID = 'farm-boundary'
-const BOUNDARY_FILL_LAYER_ID = 'farm-boundary-fill'
-const BOUNDARY_LINE_LAYER_ID = 'farm-boundary-line'
-const EMPTY_COLLECTION: FeatureCollection = { type: 'FeatureCollection', features: [] }
+const COLOR_PALETTE = ['#7fffd4', '#ffb347', '#7dd3fc', '#f472b6', '#c084fc', '#facc15']
 
 type ViewState = {
   lng: number
@@ -24,7 +44,17 @@ type ViewState = {
   zoom: number
 }
 
-type PanelPage = 'home' | 'settings' | 'layers'
+type PanelPage = 'farm' | 'layers' | 'settings'
+
+type LayerRecord = {
+  id: string
+  name: string
+  data: FeatureCollection
+  fillColor: string
+  lineColor: string
+  fillOpacity: number
+  lineWidth: number
+}
 
 function formatCoord(value: number, positive: string, negative: string) {
   return `${Math.abs(value).toFixed(3)}°${value >= 0 ? positive : negative}`
@@ -32,14 +62,11 @@ function formatCoord(value: number, positive: string, negative: string) {
 
 function asFeatureCollection(data: FeatureCollection | Feature | FeatureCollection[] | null): FeatureCollection {
   if (!data) {
-    return EMPTY_COLLECTION
+    return { type: 'FeatureCollection', features: [] }
   }
   if (Array.isArray(data)) {
-    const merged = data.flatMap((collection) => collection.features ?? [])
-    return {
-      type: 'FeatureCollection',
-      features: merged,
-    }
+    const features = data.flatMap((collection) => collection.features ?? [])
+    return { type: 'FeatureCollection', features }
   }
   if (data.type === 'FeatureCollection') {
     return data
@@ -77,21 +104,22 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const scaleControlRef = useRef<maplibregl.ScaleControl | null>(null)
+  const mountedLayerIdsRef = useRef<Set<string>>(new Set())
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
-  const [boundary, setBoundary] = useState<FeatureCollection | null>(null)
+  const [draftSketch, setDraftSketch] = useState<FeatureCollection | null>(null)
+  const [hasSketch, setHasSketch] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [lastFileName, setLastFileName] = useState<string | null>(null)
-  const [hasSketch, setHasSketch] = useState(false)
   const [activityMessage, setActivityMessage] = useState('Ready to chart your fields.')
-  const [fillColor, setFillColor] = useState('#7fffd4')
-  const [lineColor, setLineColor] = useState('#7fffd4')
-  const [fillOpacity, setFillOpacity] = useState(0.18)
-  const [lineWidth, setLineWidth] = useState(2)
   const [showSplash, setShowSplash] = useState(true)
-  const [activePanelPage, setActivePanelPage] = useState<PanelPage>('home')
+  const [panelPage, setPanelPage] = useState<PanelPage>('farm')
   const [distanceUnit, setDistanceUnit] = useState<'mi' | 'km'>('mi')
   const [themePreference, setThemePreference] = useState<'dark' | 'light' | 'system'>('dark')
+  const [baseStyle, setBaseStyle] = useState<'voyager' | 'satellite'>('voyager')
+  const [layers, setLayers] = useState<LayerRecord[]>([])
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null)
+  const [styleVersion, setStyleVersion] = useState(0)
 
   const logActivity = (message: string) => {
     setActivityMessage(message)
@@ -126,7 +154,7 @@ function App() {
 
     const mapInstance = new maplibregl.Map({
       container: mapContainerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
+      style: BASEMAP_STYLES[baseStyle],
       center: [INITIAL_VIEW.lng, INITIAL_VIEW.lat],
       zoom: INITIAL_VIEW.zoom,
       pitch: 35,
@@ -136,10 +164,10 @@ function App() {
 
     mapRef.current = mapInstance
 
-    mapInstance.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
     const scaleControl = new maplibregl.ScaleControl({ unit: distanceUnit === 'mi' ? 'imperial' : 'metric' })
     mapInstance.addControl(scaleControl, 'bottom-left')
     scaleControlRef.current = scaleControl
+
     mapInstance.addControl(
       new maplibregl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
@@ -148,6 +176,14 @@ function App() {
       'bottom-left',
     )
     mapInstance.addControl(new maplibregl.AttributionControl({ compact: true }))
+
+    const drawControl = new MapboxDraw({
+      displayControlsDefault: false,
+      controls: {},
+      defaultMode: 'draw_polygon',
+    })
+    mapInstance.addControl(drawControl as unknown as IControl, 'top-left')
+    drawRef.current = drawControl
 
     const updateView = () => {
       const center = mapInstance.getCenter()
@@ -158,77 +194,20 @@ function App() {
       })
     }
 
-    const ensureBoundaryLayers = () => {
-      if (mapInstance.getSource(BOUNDARY_SOURCE_ID)) {
-        return
-      }
-      mapInstance.addSource(BOUNDARY_SOURCE_ID, {
-        type: 'geojson',
-        data: EMPTY_COLLECTION,
-      })
-      mapInstance.addLayer({
-        id: BOUNDARY_FILL_LAYER_ID,
-        type: 'fill',
-        source: BOUNDARY_SOURCE_ID,
-        paint: {
-          'fill-color': fillColor,
-          'fill-opacity': fillOpacity,
-        },
-      })
-      mapInstance.addLayer({
-        id: BOUNDARY_LINE_LAYER_ID,
-        type: 'line',
-        source: BOUNDARY_SOURCE_ID,
-        paint: {
-          'line-color': lineColor,
-          'line-width': lineWidth,
-        },
-      })
-    }
-
-    const initializeDraw = () => {
-      if (drawRef.current) {
-        return
-      }
-      const drawControl = new MapboxDraw({
-        displayControlsDefault: false,
-        controls: {
-          polygon: true,
-          trash: true,
-        },
-        defaultMode: 'draw_polygon',
-      })
-      mapInstance.addControl(drawControl as unknown as IControl, 'top-left')
-      drawRef.current = drawControl
-
-      const refreshFromDraw = (options?: { shouldFit?: boolean }) => {
-        const collection = drawControl.getAll()
-        setHasSketch(Boolean(collection.features.length))
-        if (!collection.features.length) {
-          setBoundary(null)
-          syncBoundaryOnMap(null)
-          logActivity('Sketch cleared.')
-          return
-        }
-        setBoundary(collection)
-        syncBoundaryOnMap(collection)
+    const refreshFromDraw = () => {
+      const collection = drawControl.getAll()
+      setDraftSketch(collection.features.length ? collection : null)
+      setHasSketch(Boolean(collection.features.length))
+      if (collection.features.length) {
         logActivity(`Sketch captured (${collection.features.length} feature${collection.features.length > 1 ? 's' : ''}).`)
-        if (options?.shouldFit) {
-          fitToCollection(collection)
-        }
       }
-
-      mapInstance.on('draw.create', () => refreshFromDraw({ shouldFit: true }))
-      mapInstance.on('draw.update', () => refreshFromDraw())
-      mapInstance.on('draw.delete', () => refreshFromDraw())
     }
 
     mapInstance.on('move', updateView)
-    mapInstance.on('load', () => {
-      ensureBoundaryLayers()
-      initializeDraw()
-    })
-    updateView()
+    mapInstance.on('draw.create', refreshFromDraw)
+    mapInstance.on('draw.update', refreshFromDraw)
+    mapInstance.on('draw.delete', refreshFromDraw)
+    mapInstance.on('load', updateView)
 
     return () => {
       mapInstance.off('move', updateView)
@@ -237,15 +216,82 @@ function App() {
       drawRef.current = null
       scaleControlRef.current = null
     }
-  }, [])
+  }, [baseStyle])
 
-  const syncBoundaryOnMap = (collection: FeatureCollection | null) => {
-    const source = mapRef.current?.getSource(BOUNDARY_SOURCE_ID) as GeoJSONSource | undefined
-    if (!source) {
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) {
       return
     }
-    source.setData(collection ?? EMPTY_COLLECTION)
-  }
+    map.setStyle(BASEMAP_STYLES[baseStyle])
+    map.once('styledata', () => setStyleVersion((version) => version + 1))
+    logActivity(`Basemap switched to ${baseStyle === 'voyager' ? 'cartographic' : 'satellite'} mode.`)
+  }, [baseStyle])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) {
+      return
+    }
+    const unit = distanceUnit === 'mi' ? 'imperial' : 'metric'
+    if (scaleControlRef.current) {
+      scaleControlRef.current.setUnit(unit)
+    }
+    logActivity(`Units set to ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}.`)
+  }, [distanceUnit])
+
+  const renderLayersOnMap = useCallback(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+
+    mountedLayerIdsRef.current.forEach((layerId) => {
+      const sourceId = `${layerId}-source`
+      const fillId = `${layerId}-fill`
+      const lineId = `${layerId}-line`
+      if (map.getLayer(fillId)) map.removeLayer(fillId)
+      if (map.getLayer(lineId)) map.removeLayer(lineId)
+      if (map.getSource(sourceId)) map.removeSource(sourceId)
+    })
+    mountedLayerIdsRef.current.clear()
+
+    layers.forEach((layer) => {
+      const sourceId = `${layer.id}-source`
+      map.addSource(sourceId, { type: 'geojson', data: layer.data })
+      map.addLayer({
+        id: `${layer.id}-fill`,
+        type: 'fill',
+        source: sourceId,
+        paint: {
+          'fill-color': layer.fillColor,
+          'fill-opacity': layer.fillOpacity,
+        },
+      })
+      map.addLayer({
+        id: `${layer.id}-line`,
+        type: 'line',
+        source: sourceId,
+        paint: {
+          'line-color': layer.lineColor,
+          'line-width': layer.lineWidth,
+        },
+      })
+      mountedLayerIdsRef.current.add(layer.id)
+    })
+  }, [layers])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) {
+      return
+    }
+    if (map.isStyleLoaded()) {
+      renderLayersOnMap()
+    } else {
+      map.once('load', renderLayersOnMap)
+    }
+  }, [layers, renderLayersOnMap, styleVersion])
 
   const fitToCollection = (collection: FeatureCollection) => {
     if (!collection.features.length || !mapRef.current) {
@@ -259,6 +305,27 @@ function App() {
     mapRef.current.fitBounds(bounds, { padding: 80, duration: 800 })
   }
 
+  const addLayerFromData = (data: FeatureCollection, name?: string) => {
+    if (!data.features.length) {
+      logActivity('Uploaded GeoJSON had no features.')
+      return
+    }
+    const index = layers.length
+    const newLayer: LayerRecord = {
+      id: `layer-${Date.now()}-${index}`,
+      name: name?.replace(/\.[^/.]+$/, '') || `Layer ${index + 1}`,
+      data,
+      fillColor: COLOR_PALETTE[index % COLOR_PALETTE.length],
+      lineColor: '#ffffff',
+      fillOpacity: 0.2,
+      lineWidth: 2,
+    }
+    setLayers((prev) => [...prev, newLayer])
+    setActiveLayerId(newLayer.id)
+    logActivity(`Layer "${newLayer.name}" added.`)
+    fitToCollection(data)
+  }
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) {
@@ -267,14 +334,10 @@ function App() {
     setIsUploading(true)
     logActivity(`Loading ${file.name}...`)
     try {
-      const parsed = await readGeospatialFile(file)
-      setBoundary(parsed)
-      syncBoundaryOnMap(parsed)
-      fitToCollection(parsed)
-      drawRef.current?.deleteAll()
-      logActivity(`Imported ${parsed.features.length} feature${parsed.features.length !== 1 ? 's' : ''} from ${file.name}.`)
+      const text = await file.text()
+      const parsed = asFeatureCollection(JSON.parse(text))
+      addLayerFromData(parsed, file.name)
       setLastFileName(file.name)
-      setHasSketch(false)
     } catch (error) {
       console.error(error)
       logActivity('Unable to read that file. Please upload a valid GeoJSON.')
@@ -284,12 +347,11 @@ function App() {
     }
   }
 
-  const handleClearBoundary = () => {
-    setBoundary(null)
+  const handleClearSketch = () => {
     drawRef.current?.deleteAll()
-    syncBoundaryOnMap(null)
+    setDraftSketch(null)
     setHasSketch(false)
-    logActivity('Boundary reset.')
+    logActivity('Sketch cleared.')
   }
 
   const handleUploadClick = () => {
@@ -306,42 +368,53 @@ function App() {
     logActivity('Draw mode exited.')
   }
 
-  const updateBoundaryStyle = () => {
-    const map = mapRef.current
-    if (!map) {
+  const handleSaveSketchAsLayer = () => {
+    const sketch = drawRef.current?.getAll()
+    if (!sketch || !sketch.features.length) {
       return
     }
-    if (map.getLayer(BOUNDARY_FILL_LAYER_ID)) {
-      map.setPaintProperty(BOUNDARY_FILL_LAYER_ID, 'fill-color', fillColor)
-      map.setPaintProperty(BOUNDARY_FILL_LAYER_ID, 'fill-opacity', fillOpacity)
-    }
-    if (map.getLayer(BOUNDARY_LINE_LAYER_ID)) {
-      map.setPaintProperty(BOUNDARY_LINE_LAYER_ID, 'line-color', lineColor)
-      map.setPaintProperty(BOUNDARY_LINE_LAYER_ID, 'line-width', lineWidth)
-    }
+    addLayerFromData(sketch, `Sketch ${layers.length + 1}`)
+    drawRef.current?.deleteAll()
+    setDraftSketch(null)
+    setHasSketch(false)
   }
 
-  useEffect(() => {
-    updateBoundaryStyle()
-  }, [fillColor, fillOpacity, lineColor, lineWidth])
+  const handleLayerStyleChange = (layerId: string, partial: Partial<LayerRecord>) => {
+    setLayers((prev) => prev.map((layer) => (layer.id === layerId ? { ...layer, ...partial } : layer)))
+  }
 
-  useEffect(() => {
-    if (!scaleControlRef.current) {
-      return
+  const handleLayerDelete = (layerId: string) => {
+    setLayers((prev) => prev.filter((layer) => layer.id !== layerId))
+    if (activeLayerId === layerId) {
+      setActiveLayerId(null)
     }
-    const unit = distanceUnit === 'mi' ? 'imperial' : 'metric'
-    scaleControlRef.current.setUnit(unit)
-    logActivity(`Units set to ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}.`)
-  }, [distanceUnit])
+    logActivity('Layer removed.')
+  }
 
   const latLabel = formatCoord(viewState.lat, 'N', 'S')
   const lngLabel = formatCoord(viewState.lng, 'E', 'W')
+  const activeLayer = activeLayerId ? layers.find((layer) => layer.id === activeLayerId) ?? null : layers[0] ?? null
 
-  const renderHomePage = () => (
+  const renderFarmPage = () => (
     <>
-      <p className="panel-subtext">{boundary ? `${boundary.features.length} feature(s) loaded.` : 'Sketch or upload to begin.'}</p>
+      <p className="panel-subtext">
+        {layers.length ? `${layers.length} layer${layers.length === 1 ? '' : 's'} tracked.` : 'Add a GeoJSON or sketch to begin.'}
+      </p>
       <div className="panel-section">
-        <p className="panel-section-label">Actions</p>
+        <p className="panel-section-label">Intake</p>
+        <div className="control-actions">
+          <button type="button" onClick={handleUploadClick} disabled={isUploading}>
+            {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
+          </button>
+          <button type="button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
+            Save sketch
+          </button>
+        </div>
+        <input ref={fileInputRef} type="file" accept=".geojson,.json" className="sr-only" onChange={handleFileChange} />
+        {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+      </div>
+      <div className="panel-section">
+        <p className="panel-section-label">Sketch tools</p>
         <div className="control-actions">
           <button type="button" onClick={handleStartDrawing}>
             Draw
@@ -349,25 +422,87 @@ function App() {
           <button type="button" onClick={handleFinishDrawing}>
             Finish
           </button>
-          <button type="button" onClick={handleClearBoundary} disabled={!boundary && !hasSketch}>
+          <button type="button" onClick={handleClearSketch} disabled={!hasSketch}>
             Clear
           </button>
         </div>
-        <div className="control-actions">
-          <button type="button" onClick={handleUploadClick} disabled={isUploading}>
-            {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
-          </button>
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".geojson,.json"
-          className="sr-only"
-          onChange={handleFileChange}
-        />
-        {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+        {draftSketch ? (
+          <p className="status-subline">Draft contains {draftSketch.features.length} feature{draftSketch.features.length === 1 ? '' : 's'}.</p>
+        ) : null}
       </div>
     </>
+  )
+
+  const renderLayersPage = () => (
+    <div className="layers-page">
+      <div className="layer-list">
+        {layers.length === 0 ? (
+          <p className="empty-state">No layers yet. Upload GeoJSON to add one.</p>
+        ) : (
+          layers.map((layer) => (
+            <button
+              key={layer.id}
+              type="button"
+              className={layer.id === activeLayerId ? 'layer-row active' : 'layer-row'}
+              onClick={() => setActiveLayerId(layer.id)}
+            >
+              <span>{layer.name}</span>
+              <small>{layer.data.features.length} feature{layer.data.features.length === 1 ? '' : 's'}</small>
+            </button>
+          ))
+        )}
+      </div>
+      {activeLayer ? (
+        <div className="layer-editor">
+          <p className="panel-section-label">Style overrides</p>
+          <div className="style-row">
+            <label>
+              Fill
+              <input
+                type="color"
+                value={activeLayer.fillColor}
+                onChange={(event) => handleLayerStyleChange(activeLayer.id, { fillColor: event.target.value })}
+              />
+            </label>
+            <label>
+              Line
+              <input
+                type="color"
+                value={activeLayer.lineColor}
+                onChange={(event) => handleLayerStyleChange(activeLayer.id, { lineColor: event.target.value })}
+              />
+            </label>
+          </div>
+          <div className="style-row sliders">
+            <label>
+              Fill opacity
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={activeLayer.fillOpacity}
+                onChange={(event) => handleLayerStyleChange(activeLayer.id, { fillOpacity: Number(event.target.value) })}
+              />
+            </label>
+            <label>
+              Line width
+              <input
+                type="range"
+                min="1"
+                max="8"
+                step="0.5"
+                value={activeLayer.lineWidth}
+                onChange={(event) => handleLayerStyleChange(activeLayer.id, { lineWidth: Number(event.target.value) })}
+              />
+            </label>
+          </div>
+          <button type="button" className="danger-button" onClick={() => handleLayerDelete(activeLayer.id)}>
+            Delete layer
+          </button>
+        </div>
+      ) : null}
+    </div>
   )
 
   const renderSettingsPage = () => (
@@ -386,85 +521,39 @@ function App() {
       <div>
         <p className="panel-section-label">Theme</p>
         <div className="segmented triple">
-          <button
-            type="button"
-            className={themePreference === 'dark' ? 'active' : ''}
-            onClick={() => setThemePreference('dark')}
-          >
+          <button type="button" className={themePreference === 'dark' ? 'active' : ''} onClick={() => setThemePreference('dark')}>
             Dark
           </button>
-          <button
-            type="button"
-            className={themePreference === 'light' ? 'active' : ''}
-            onClick={() => setThemePreference('light')}
-          >
+          <button type="button" className={themePreference === 'light' ? 'active' : ''} onClick={() => setThemePreference('light')}>
             Light
           </button>
-          <button
-            type="button"
-            className={themePreference === 'system' ? 'active' : ''}
-            onClick={() => setThemePreference('system')}
-          >
+          <button type="button" className={themePreference === 'system' ? 'active' : ''} onClick={() => setThemePreference('system')}>
             System
           </button>
         </div>
       </div>
-    </div>
-  )
-
-  const renderLayersPage = () => (
-    <div className="panel-section layers">
-      <div className="layer-item active">
-        <div>
-          <p>Field Boundary</p>
-          <span>GeoJSON overlay</span>
+      <div>
+        <p className="panel-section-label">Basemap</p>
+        <div className="segmented">
+          <button type="button" className={baseStyle === 'voyager' ? 'active' : ''} onClick={() => setBaseStyle('voyager')}>
+            Light topo
+          </button>
+          <button type="button" className={baseStyle === 'satellite' ? 'active' : ''} onClick={() => setBaseStyle('satellite')}>
+            Satellite
+          </button>
         </div>
-      </div>
-      <div className="style-row">
-        <label>
-          Fill
-          <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} />
-        </label>
-        <label>
-          Line
-          <input type="color" value={lineColor} onChange={(event) => setLineColor(event.target.value)} />
-        </label>
-      </div>
-      <div className="style-row sliders">
-        <label>
-          Fill opacity
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={fillOpacity}
-            onChange={(event) => setFillOpacity(Number(event.target.value))}
-          />
-        </label>
-        <label>
-          Line width
-          <input
-            type="range"
-            min="1"
-            max="8"
-            step="0.5"
-            value={lineWidth}
-            onChange={(event) => setLineWidth(Number(event.target.value))}
-          />
-        </label>
       </div>
     </div>
   )
 
   const renderPanelContent = () => {
-    if (activePanelPage === 'settings') {
-      return renderSettingsPage()
-    }
-    if (activePanelPage === 'layers') {
+    if (panelPage === 'layers') {
       return renderLayersPage()
     }
-    return renderHomePage()
+    if (panelPage === 'settings') {
+      return renderSettingsPage()
+    }
+    return renderFarmPage()
   }
 
   return (
@@ -485,19 +574,19 @@ function App() {
           <div ref={panelRef} className="control-panel">
             <div className="panel-header">
               <button type="button" className="panel-drag-handle" aria-label="Drag panel">
-                <span aria-hidden="true">⤧</span>
+                <span aria-hidden="true">⤢</span>
               </button>
               <div className="panel-tabs">
                 {[
-                  { id: 'home', label: 'Home' },
+                  { id: 'farm', label: 'My Farm' },
                   { id: 'layers', label: 'Layers' },
                   { id: 'settings', label: 'Settings' },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
-                    className={activePanelPage === (tab.id as PanelPage) ? 'active' : ''}
-                    onClick={() => setActivePanelPage(tab.id as PanelPage)}
+                    className={panelPage === (tab.id as PanelPage) ? 'active' : ''}
+                    onClick={() => setPanelPage(tab.id as PanelPage)}
                   >
                     {tab.label}
                   </button>
@@ -512,6 +601,9 @@ function App() {
           <span>{latLabel}</span>
           <span>{lngLabel}</span>
         </div>
+        <div className="pan-indicator" aria-hidden="true">
+          <span>✥</span>
+        </div>
       </div>
 
       <div className="activity-ticker">
@@ -519,15 +611,6 @@ function App() {
       </div>
     </div>
   )
-}
-
-async function readGeospatialFile(file: File): Promise<FeatureCollection> {
-  const extension = file.name.split('.').pop()?.toLowerCase()
-  if (extension === 'geojson' || extension === 'json') {
-    const text = await file.text()
-    return asFeatureCollection(JSON.parse(text))
-  }
-  throw new Error('Unsupported file type')
 }
 
 export default App

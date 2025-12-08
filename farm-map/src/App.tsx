@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type React from 'react'
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, {
   type FillLayerSpecification,
-  type IControl,
   type Map,
   type MapMouseEvent,
   type StyleSpecification,
 } from 'maplibre-gl'
-import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import Draggable from 'react-draggable'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import './App.css'
 
 const BASEMAP_STYLES: Record<'voyager' | 'satellite', string | StyleSpecification> = {
@@ -43,6 +41,7 @@ const INITIAL_VIEW = {
 }
 
 const COLOR_PALETTE = ['#7fffd4', '#ffb347', '#7dd3fc', '#f472b6', '#c084fc', '#facc15']
+const DEFAULT_GROUP_ID = 'group-default'
 const LAYER_TOOLTIP_DELAY = 500
 const FEATURE_TOOLTIP_DELAY = 500
 const CAMERA_MARKER_CLASS = 'camera-marker'
@@ -59,14 +58,16 @@ const DEFAULT_HOVER_FIELDS = ['name', 'crop', 'acres']
 type PanelPage = 'farm' | 'layers' | 'settings' | 'camera'
 type HatchPattern = 'solid' | 'diagonal' | 'cross'
 type CameraMode = 'north-up' | 'free'
-
-type LayerSourceType = 'sketch' | 'upload'
+type LayerGroup = {
+  id: string
+  name: string
+}
 
 type LayerRecord = {
   id: string
   name: string
+  groupId: string
   data: FeatureCollection
-  sourceType: LayerSourceType
   fillColor: string
   lineColor: string
   fillOpacity: number
@@ -99,6 +100,12 @@ type CameraPreview = {
   camera: CameraRecord
   x?: number
   y?: number
+}
+
+type WeatherSnapshot = {
+  temperatureF: number
+  windMph: number
+  humidity: number
 }
 
 const formatCoord = (value: number, positive: string, negative: string) => `${Math.abs(value).toFixed(3)}°${value >= 0 ? positive : negative}`
@@ -172,7 +179,6 @@ const formatTimestamp = () => {
 function App() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<Map | null>(null)
-  const drawRef = useRef<MapboxDraw | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const scaleControlRef = useRef<maplibregl.ScaleControl | null>(null)
@@ -183,8 +189,6 @@ function App() {
   const pickCameraLocationRef = useRef(false)
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
-  const [hasSketch, setHasSketch] = useState(false)
-  const [draftSketch, setDraftSketch] = useState<FeatureCollection | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [lastFileName, setLastFileName] = useState<string | null>(null)
   const [activityMessage, setActivityMessage] = useState(`[${formatTimestamp()}] Ready to chart your fields.`)
@@ -197,6 +201,12 @@ function App() {
   const [layers, setLayers] = useState<LayerRecord[]>([])
   const [expandedLayerId, setExpandedLayerId] = useState<string | null>(null)
   const [layerTooltip, setLayerTooltip] = useState<LayerTooltip | null>(null)
+  const [layerGroups, setLayerGroups] = useState<LayerGroup[]>([{ id: DEFAULT_GROUP_ID, name: 'My Layers' }])
+  const [activeGroupId, setActiveGroupId] = useState(DEFAULT_GROUP_ID)
+  const [draggingLayerId, setDraggingLayerId] = useState<string | null>(null)
+  const [groupRenameId, setGroupRenameId] = useState<string | null>(null)
+  const [groupRenameDraft, setGroupRenameDraft] = useState('')
+  const [newGroupName, setNewGroupName] = useState('')
   const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [mapHoverInfo, setMapHoverInfo] = useState<MapHoverInfo | null>(null)
@@ -207,7 +217,9 @@ function App() {
   const [cameraRenameId, setCameraRenameId] = useState<string | null>(null)
   const [cameraRenameDraft, setCameraRenameDraft] = useState('')
   const [showSoilLayer, setShowSoilLayer] = useState(false)
+  const [soilOpacity, setSoilOpacity] = useState(0.65)
   const [styleVersion, setStyleVersion] = useState(0)
+  const [weather, setWeather] = useState<WeatherSnapshot | null>(null)
   const cameraPreviewRef = useRef<HTMLDivElement | null>(null)
 
   const logActivity = (message: string) => {
@@ -270,26 +282,9 @@ function App() {
     )
     mapInstance.addControl(new maplibregl.AttributionControl({ compact: true }))
 
-    const drawControl = new MapboxDraw({
-      displayControlsDefault: false,
-      controls: {},
-      defaultMode: 'draw_polygon',
-    })
-    mapInstance.addControl(drawControl as unknown as IControl, 'top-left')
-    drawRef.current = drawControl
-
     const updateView = () => {
       const center = mapInstance.getCenter()
       setViewState({ lng: center.lng, lat: center.lat, zoom: mapInstance.getZoom() })
-    }
-
-    const refreshFromDraw = () => {
-      const collection = drawControl.getAll()
-      setDraftSketch(collection.features.length ? collection : null)
-      setHasSketch(Boolean(collection.features.length))
-      if (collection.features.length) {
-        logActivity(`Sketch captured (${collection.features.length} feature${collection.features.length > 1 ? 's' : ''}).`)
-      }
     }
 
     const handleMapClick = (event: MapMouseEvent) => {
@@ -307,17 +302,14 @@ function App() {
     }
 
     mapInstance.on('move', updateView)
-    mapInstance.on('draw.create', refreshFromDraw)
-    mapInstance.on('draw.update', refreshFromDraw)
-    mapInstance.on('draw.delete', refreshFromDraw)
     mapInstance.on('load', updateView)
     mapInstance.on('click', handleMapClick)
 
     return () => {
+      mapInstance.off('move', updateView)
       mapInstance.off('click', handleMapClick)
       mapInstance.remove()
       mapRef.current = null
-      drawRef.current = null
       scaleControlRef.current = null
     }
   }, [])
@@ -357,6 +349,35 @@ function App() {
       map.touchZoomRotate.enableRotation()
     }
   }, [cameraMode])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${viewState.lat}&longitude=${viewState.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`,
+          { signal: controller.signal },
+        )
+        const data = await response.json()
+        if (data?.current) {
+          setWeather({
+            temperatureF: data.current.temperature_2m,
+            windMph: data.current.wind_speed_10m,
+            humidity: data.current.relative_humidity_2m,
+          })
+        }
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.warn('Weather fetch failed', error)
+        }
+      }
+    }, 800)
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(timer)
+    }
+  }, [viewState.lat, viewState.lng])
 
   const ensurePatternImage = useCallback((map: Map, pattern: HatchPattern) => {
     if (pattern === 'solid') {
@@ -446,10 +467,12 @@ function App() {
             id: SOIL_LAYER_ID,
             type: 'raster',
             source: SOIL_SOURCE_ID,
-            paint: { 'raster-opacity': 0.65 },
+            paint: { 'raster-opacity': soilOpacity },
           },
           anchorLayerId,
         )
+      } else {
+        map.setPaintProperty(SOIL_LAYER_ID, 'raster-opacity', soilOpacity)
       }
     } else {
       if (map.getLayer(SOIL_LAYER_ID)) {
@@ -459,7 +482,7 @@ function App() {
         map.removeSource(SOIL_SOURCE_ID)
       }
     }
-  }, [layers, showSoilLayer])
+  }, [layers, showSoilLayer, soilOpacity])
 
   useEffect(() => {
     syncSoilOverlay()
@@ -511,7 +534,7 @@ function App() {
     mapRef.current.fitBounds(bounds, { padding: 80, duration: 800 })
   }
 
-  const addLayerFromData = (data: FeatureCollection, name?: string, sourceType: LayerSourceType = 'upload') => {
+  const addLayerFromData = (data: FeatureCollection, name?: string) => {
     if (!data.features.length) {
       logActivity('Uploaded GeoJSON had no features.')
       return
@@ -520,8 +543,8 @@ function App() {
     const newLayer: LayerRecord = {
       id: `layer-${Date.now()}-${index}`,
       name: name?.replace(/\.[^/.]+$/, '') || `Layer ${index + 1}`,
+      groupId: activeGroupId,
       data,
-      sourceType,
       fillColor: COLOR_PALETTE[index % COLOR_PALETTE.length],
       lineColor: '#ffffff',
       fillOpacity: 0.25,
@@ -575,36 +598,8 @@ function App() {
     }
   }
 
-  const handleClearSketch = () => {
-    drawRef.current?.deleteAll()
-    setDraftSketch(null)
-    setHasSketch(false)
-    logActivity('Sketch cleared.')
-  }
-
   const handleUploadClick = () => {
     fileInputRef.current?.click()
-  }
-
-  const handleStartDrawing = () => {
-    drawRef.current?.changeMode('draw_polygon')
-    logActivity('Draw mode activated.')
-  }
-
-  const handleFinishDrawing = () => {
-    drawRef.current?.changeMode('simple_select')
-    logActivity('Draw mode exited.')
-  }
-
-  const handleSaveSketchAsLayer = () => {
-    const sketch = drawRef.current?.getAll()
-    if (!sketch || !sketch.features.length) {
-      return
-    }
-    addLayerFromData(sketch, `Sketch ${layers.length + 1}`, 'sketch')
-    drawRef.current?.deleteAll()
-    setDraftSketch(null)
-    setHasSketch(false)
   }
 
   const handleLayerStyleChange = (layerId: string, partial: Partial<LayerRecord>) => {
@@ -617,6 +612,59 @@ function App() {
       setExpandedLayerId(null)
     }
     logActivity('Layer removed.')
+  }
+
+  const handleLayerGroupChange = (layerId: string, groupId: string) => {
+    setLayers((prev) => prev.map((layer) => (layer.id === layerId ? { ...layer, groupId } : layer)))
+  }
+
+  const handleAddGroup = () => {
+    if (!newGroupName.trim()) {
+      return
+    }
+    const group: LayerGroup = { id: `group-${Date.now()}`, name: newGroupName.trim() }
+    setLayerGroups((prev) => [...prev, group])
+    setActiveGroupId(group.id)
+    setNewGroupName('')
+    logActivity(`Group "${group.name}" created.`)
+  }
+
+  const beginGroupRename = (group: LayerGroup) => {
+    setGroupRenameId(group.id)
+    setGroupRenameDraft(group.name)
+  }
+
+  const commitGroupRename = () => {
+    if (!groupRenameId) {
+      return
+    }
+    setLayerGroups((prev) => prev.map((group) => (group.id === groupRenameId ? { ...group, name: groupRenameDraft || group.name } : group)))
+    setGroupRenameId(null)
+  }
+
+  const handleLayerDragStart = (layerId: string) => {
+    setDraggingLayerId(layerId)
+  }
+
+  const handleLayerDragEnter = (targetId: string) => {
+    if (!draggingLayerId || draggingLayerId === targetId) {
+      return
+    }
+    setLayers((prev) => {
+      const current = [...prev]
+      const fromIndex = current.findIndex((layer) => layer.id === draggingLayerId)
+      const toIndex = current.findIndex((layer) => layer.id === targetId)
+      if (fromIndex === -1 || toIndex === -1) {
+        return prev
+      }
+      const [moved] = current.splice(fromIndex, 1)
+      current.splice(toIndex, 0, moved)
+      return current
+    })
+  }
+
+  const handleLayerDragEnd = () => {
+    setDraggingLayerId(null)
   }
 
   const beginRename = (layer: LayerRecord) => {
@@ -667,6 +715,18 @@ function App() {
       })
     }, LAYER_TOOLTIP_DELAY)
   }
+
+  const groupedLayers = useMemo(() => {
+    const mapping = new globalThis.Map<string, LayerRecord[]>()
+    layerGroups.forEach((group) => mapping.set(group.id, []))
+    layers.forEach((layer) => {
+      if (!mapping.has(layer.groupId)) {
+        mapping.set(layer.groupId, [])
+      }
+      mapping.get(layer.groupId)!.push(layer)
+    })
+    return mapping
+  }, [layerGroups, layers])
 
   const handleLayerMouseLeave = () => {
     if (layerTooltipTimerRef.current) {
@@ -729,7 +789,6 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
     setPickCameraLocation((prev) => {
       const next = !prev
       if (next) {
-        drawRef.current?.changeMode('simple_select')
         logActivity('Click anywhere on the map to assign camera coordinates.')
       }
       return next
@@ -795,44 +854,68 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
   }
 
   const renderFarmPage = () => (
-    <>
-      <p className="panel-subtext">A high-level summary pane reserved for future agronomic widgets.</p>
-      <div className="panel-section">
-        <p className="panel-section-label">Sketch tools</p>
-        <div className="control-actions">
-          <button type="button" onClick={handleStartDrawing}>
-            Draw
-          </button>
-          <button type="button" onClick={handleFinishDrawing}>
-            Finish
-          </button>
-          <button type="button" onClick={handleClearSketch} disabled={!hasSketch}>
-            Clear
-          </button>
+    <div className="panel-section stack">
+      <p className="panel-section-label">Field snapshot</p>
+      <div className="stats-grid">
+        <div>
+          <p className="stat-value">{layers.length}</p>
+          <p className="stat-label">Layers loaded</p>
         </div>
-        <div className="control-actions">
-          <button type="button" className="primary-button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
-            Save sketch to layers
-          </button>
+        <div>
+          <p className="stat-value">{layerGroups.length}</p>
+          <p className="stat-label">Groups</p>
         </div>
-        {draftSketch ? (
-          <p className="status-subline">Draft contains {draftSketch.features.length} feature{draftSketch.features.length === 1 ? '' : 's'}.</p>
-        ) : null}
+        <div>
+          <p className="stat-value">{cameras.length}</p>
+          <p className="stat-label">Cameras</p>
+        </div>
       </div>
-    </>
+      <p className="panel-subtext">Upload GeoJSON boundaries or reorder layers in the Layers tab. Weather telemetry now streams live next to the map.</p>
+    </div>
   )
 
-  const renderLayerGroup = (title: string, entries: LayerRecord[]) => (
-    <div className="layer-group" key={title}>
+  const renderLayerGroup = (group: LayerGroup, entries: LayerRecord[]) => (
+    <div className="layer-group" key={group.id}>
       <div className="layer-group-header">
-        <p>{title}</p>
+        {groupRenameId === group.id ? (
+          <input
+            autoFocus
+            value={groupRenameDraft}
+            onChange={(event) => setGroupRenameDraft(event.target.value)}
+            onBlur={commitGroupRename}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitGroupRename()
+              }
+              if (event.key === 'Escape') {
+                setGroupRenameId(null)
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className={group.id === activeGroupId ? 'group-chip active' : 'group-chip'}
+            onClick={() => setActiveGroupId(group.id)}
+            onDoubleClick={() => beginGroupRename(group)}
+          >
+            {group.name}
+          </button>
+        )}
         <small>{entries.length} item{entries.length === 1 ? '' : 's'}</small>
       </div>
-      <div className="layer-list">
+      <div className="layer-list" onDragOver={(event) => event.preventDefault()}>
         {entries.map((layer) => {
           const expanded = expandedLayerId === layer.id
           return (
-            <div key={layer.id} className={`layer-block ${expanded ? 'expanded' : ''}`}>
+            <div
+              key={layer.id}
+              className={`layer-block ${expanded ? 'expanded' : ''}`}
+              draggable
+              onDragStart={() => handleLayerDragStart(layer.id)}
+              onDragEnter={() => handleLayerDragEnter(layer.id)}
+              onDragEnd={handleLayerDragEnd}
+            >
               <button
                 type="button"
                 className={expanded ? 'layer-row active info-hover' : 'layer-row info-hover'}
@@ -915,6 +998,16 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
                       <option value="cross">Cross</option>
                     </select>
                   </label>
+                  <label className="selector">
+                    Group
+                    <select value={layer.groupId} onChange={(event) => handleLayerGroupChange(layer.id, event.target.value)}>
+                      {layerGroups.map((groupOption) => (
+                        <option key={groupOption.id} value={groupOption.id}>
+                          {groupOption.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <button type="button" className="danger-button" onClick={() => handleLayerDelete(layer.id)}>
                     Delete layer
                   </button>
@@ -927,57 +1020,50 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
     </div>
   )
 
-  const renderLayersPage = () => {
-    const grouped = new globalThis.Map<string, LayerRecord[]>()
-    layers.forEach((layer) => {
-      const group = layer.sourceType === 'sketch' ? 'Sketches' : 'Imported layers'
-      if (!grouped.has(group)) {
-        grouped.set(group, [])
-      }
-      grouped.get(group)!.push(layer)
-    })
-
-    return (
-      <div className="layers-page">
-        <div className="panel-section">
-          <p className="panel-section-label">Sketch tools</p>
-          <div className="control-actions">
-            <button type="button" onClick={handleStartDrawing}>
-              Draw
-            </button>
-            <button type="button" onClick={handleFinishDrawing}>
-              Finish
-            </button>
-            <button type="button" onClick={handleClearSketch} disabled={!hasSketch}>
-              Clear
-            </button>
-          </div>
-          <div className="control-actions">
-            <button type="button" className="primary-button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
-              Save sketch to layers
-            </button>
-            <button type="button" className="primary-button" onClick={handleUploadClick} disabled={isUploading}>
-              {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
-            </button>
-          </div>
-          <input ref={fileInputRef} type="file" accept=".geojson,.json" className="sr-only" onChange={handleFileChange} />
-          {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+  const renderLayersPage = () => (
+    <div className="layers-page">
+      <div className="panel-section stack">
+        <p className="panel-section-label">Layer intake</p>
+        <div className="control-actions">
+          <button type="button" className="primary-button" onClick={handleUploadClick} disabled={isUploading}>
+            {isUploading ? 'Loading…' : 'Upload GeoJSON'}
+          </button>
+          <input ref={fileInputRef} type="file" accept=".geojson,.json" hidden onChange={handleFileChange} />
+          {lastFileName ? <span className="status-subline">Last import: {lastFileName}</span> : null}
         </div>
-
-        {layers.length === 0 ? (
-          <p className="empty-state">No layers yet. Upload GeoJSON to add one.</p>
-        ) : (
-          Array.from(grouped.entries()).map(([title, entries]) => renderLayerGroup(title, entries))
-        )}
-
-        {layerTooltip && layerTooltip.id ? (
-          <div className="layer-tooltip" style={{ left: layerTooltip.x, top: layerTooltip.y }}>
-            {layerTooltip.details}
-          </div>
-        ) : null}
       </div>
-    )
-  }
+      <div className="panel-section stack">
+        <p className="panel-section-label">Groups</p>
+        <div className="group-chip-row">
+          {layerGroups.map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className={group.id === activeGroupId ? 'group-chip active' : 'group-chip'}
+              onClick={() => setActiveGroupId(group.id)}
+              onDoubleClick={() => beginGroupRename(group)}
+            >
+              {group.name}
+            </button>
+          ))}
+        </div>
+        <div className="group-form">
+          <input
+            value={newGroupName}
+            onChange={(event) => setNewGroupName(event.target.value)}
+            placeholder="New group name"
+            maxLength={32}
+          />
+          <button type="button" onClick={handleAddGroup}>
+            Add group
+          </button>
+        </div>
+      </div>
+
+      {layerGroups.map((group) => renderLayerGroup(group, groupedLayers.get(group.id) ?? []))}
+
+    </div>
+  )
 
   const renderSettingsPage = () => (
     <div className="panel-section stack">
@@ -1030,6 +1116,19 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
         <small className="status-subline">
           Data from USDA NRCS Web Soil Survey (SSURGO Landcape). Renders beneath your layers.
         </small>
+        {showSoilLayer ? (
+          <label className="selector">
+            Opacity
+            <input
+              type="range"
+              min="0.2"
+              max="1"
+              step="0.05"
+              value={soilOpacity}
+              onChange={(event) => setSoilOpacity(Number(event.target.value))}
+            />
+          </label>
+        ) : null}
       </div>
     </div>
   )
@@ -1228,6 +1327,25 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
 
       <div className="map-panel">
         <div ref={mapContainerRef} className="map-canvas" />
+        {weather ? (
+          <div className="weather-widget">
+            <p className="weather-title">Field weather</p>
+            <div className="weather-metrics">
+              <div>
+                <span className="weather-value">{Math.round(weather.temperatureF)}°F</span>
+                <span className="weather-label">Temp</span>
+              </div>
+              <div>
+                <span className="weather-value">{Math.round(weather.windMph)} mph</span>
+                <span className="weather-label">Wind</span>
+              </div>
+              <div>
+                <span className="weather-value">{Math.round(weather.humidity)}%</span>
+                <span className="weather-label">Humidity</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <Draggable handle=".panel-drag-handle" nodeRef={panelRef}>
           <div ref={panelRef} className="control-panel">

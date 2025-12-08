@@ -124,6 +124,12 @@
   margin-top: 1.2rem;
 }
 
+.panel-section.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
 .panel-section-label {
   margin: 0;
   font-size: 0.75rem;
@@ -358,6 +364,113 @@
   pointer-events: none;
   transform: translate(-50%, -110%);
   white-space: pre-wrap;
+}
+
+.group-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.group-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.group-chip.active {
+  color: var(--text-primary);
+  border-color: rgba(142, 203, 255, 0.7);
+  background: rgba(142, 203, 255, 0.2);
+}
+
+.group-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.group-form input {
+  flex: 1;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  padding: 0.4rem 0.5rem;
+}
+
+.group-form button {
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.weather-widget {
+  position: absolute;
+  top: 4.2rem;
+  right: 2rem;
+  z-index: 5;
+  padding: 0.9rem 1.1rem;
+  border-radius: 1rem;
+  background: rgba(4, 10, 25, 0.78);
+  border: 1px solid rgba(101, 149, 218, 0.4);
+  color: #e6f2ff;
+  min-width: 180px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+}
+
+.weather-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+
+.weather-metrics {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.weather-value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.weather-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #9bb7d7;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stat-label {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
 }
 
 .map-hover-card {

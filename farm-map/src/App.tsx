@@ -57,7 +57,6 @@ const DEFAULT_HOVER_FIELDS = ['name', 'crop', 'acres']
 
 type PanelPage = 'farm' | 'layers' | 'settings' | 'camera'
 type HatchPattern = 'solid' | 'diagonal' | 'cross'
-type CameraMode = 'north-up' | 'free'
 type LayerGroup = {
   id: string
   name: string
@@ -193,11 +192,11 @@ function App() {
   const [lastFileName, setLastFileName] = useState<string | null>(null)
   const [activityMessage, setActivityMessage] = useState(`[${formatTimestamp()}] Ready to chart your fields.`)
   const [showSplash, setShowSplash] = useState(true)
+  const [panelVisible, setPanelVisible] = useState(false)
   const [panelPage, setPanelPage] = useState<PanelPage>('farm')
   const [distanceUnit, setDistanceUnit] = useState<'mi' | 'km'>('mi')
   const [themePreference, setThemePreference] = useState<'dark' | 'light' | 'system'>('dark')
   const [baseStyle, setBaseStyle] = useState<'voyager' | 'satellite'>('voyager')
-  const [cameraMode, setCameraMode] = useState<CameraMode>('north-up')
   const [layers, setLayers] = useState<LayerRecord[]>([])
   const [expandedLayerId, setExpandedLayerId] = useState<string | null>(null)
   const [layerTooltip, setLayerTooltip] = useState<LayerTooltip | null>(null)
@@ -230,6 +229,12 @@ function App() {
     const timer = window.setTimeout(() => setShowSplash(false), 1500)
     return () => window.clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    if (!panelVisible) {
+      setLayerTooltip(null)
+    }
+  }, [panelVisible])
 
   useEffect(() => {
     pickCameraLocationRef.current = pickCameraLocation
@@ -281,6 +286,8 @@ function App() {
       'bottom-left',
     )
     mapInstance.addControl(new maplibregl.AttributionControl({ compact: true }))
+    mapInstance.dragRotate.disable()
+    mapInstance.touchZoomRotate.disableRotation()
 
     const updateView = () => {
       const center = mapInstance.getCenter()
@@ -334,21 +341,6 @@ function App() {
     scaleControlRef.current.setUnit(unit)
     logActivity(`Units set to ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}.`)
   }, [distanceUnit])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) {
-      return
-    }
-    if (cameraMode === 'north-up') {
-      map.dragRotate.disable()
-      map.touchZoomRotate.disableRotation()
-      map.easeTo({ bearing: 0, pitch: 0, duration: 600 })
-    } else {
-      map.dragRotate.enable()
-      map.touchZoomRotate.enableRotation()
-    }
-  }, [cameraMode])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -449,6 +441,9 @@ function App() {
   const syncSoilOverlay = useCallback(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) {
+      if (map) {
+        map.once('styledata', () => syncSoilOverlay())
+      }
       return
     }
     const anchorLayerId = layers.length ? `${layers[0].id}-fill` : undefined
@@ -614,19 +609,15 @@ function App() {
     logActivity('Layer removed.')
   }
 
-  const handleLayerGroupChange = (layerId: string, groupId: string) => {
-    setLayers((prev) => prev.map((layer) => (layer.id === layerId ? { ...layer, groupId } : layer)))
-  }
-
   const handleAddGroup = () => {
     if (!newGroupName.trim()) {
       return
     }
-    const group: LayerGroup = { id: `group-${Date.now()}`, name: newGroupName.trim() }
-    setLayerGroups((prev) => [...prev, group])
-    setActiveGroupId(group.id)
+    const newGroup: LayerGroup = { id: `group-${Date.now()}`, name: newGroupName.trim() }
+    setLayerGroups((prev) => [...prev, newGroup])
+    setActiveGroupId(newGroup.id)
     setNewGroupName('')
-    logActivity(`Group "${group.name}" created.`)
+    logActivity(`Group "${newGroup.name}" created.`)
   }
 
   const beginGroupRename = (group: LayerGroup) => {
@@ -640,6 +631,23 @@ function App() {
     }
     setLayerGroups((prev) => prev.map((group) => (group.id === groupRenameId ? { ...group, name: groupRenameDraft || group.name } : group)))
     setGroupRenameId(null)
+  }
+
+  const handleDeleteGroup = (groupId: string) => {
+    if (groupId === DEFAULT_GROUP_ID) {
+      logActivity('Default group cannot be removed.')
+      return
+    }
+    setLayerGroups((prev) => prev.filter((group) => group.id !== groupId))
+    setLayers((prev) => prev.map((layer) => (layer.groupId === groupId ? { ...layer, groupId: DEFAULT_GROUP_ID } : layer)))
+    if (activeGroupId === groupId) {
+      setActiveGroupId(DEFAULT_GROUP_ID)
+    }
+    logActivity('Group removed; affected layers moved to My Layers.')
+  }
+
+  const handleLayerGroupChange = (layerId: string, groupId: string) => {
+    setLayers((prev) => prev.map((layer) => (layer.id === layerId ? { ...layer, groupId } : layer)))
   }
 
   const handleLayerDragStart = (layerId: string) => {
@@ -736,7 +744,7 @@ function App() {
     setLayerTooltip(null)
   }
 
-const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill`, `${layer.id}-line`]), [layers])
+  const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill`, `${layer.id}-line`]), [layers])
 
   useEffect(() => {
     const map = mapRef.current
@@ -877,32 +885,52 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
   const renderLayerGroup = (group: LayerGroup, entries: LayerRecord[]) => (
     <div className="layer-group" key={group.id}>
       <div className="layer-group-header">
-        {groupRenameId === group.id ? (
-          <input
-            autoFocus
-            value={groupRenameDraft}
-            onChange={(event) => setGroupRenameDraft(event.target.value)}
-            onBlur={commitGroupRename}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                commitGroupRename()
-              }
-              if (event.key === 'Escape') {
-                setGroupRenameId(null)
-              }
-            }}
-          />
-        ) : (
+        <div className="group-header-main">
+          {groupRenameId === group.id ? (
+            <input
+              autoFocus
+              className="group-rename-input"
+              value={groupRenameDraft}
+              onChange={(event) => setGroupRenameDraft(event.target.value)}
+              onBlur={commitGroupRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  commitGroupRename()
+                }
+                if (event.key === 'Escape') {
+                  setGroupRenameId(null)
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className={group.id === activeGroupId ? 'group-chip active' : 'group-chip'}
+              onClick={() => setActiveGroupId(group.id)}
+            >
+              {group.name}
+            </button>
+          )}
+          <small>{entries.length} item{entries.length === 1 ? '' : 's'}</small>
+        </div>
+        <div className="group-header-actions">
           <button
             type="button"
-            className={group.id === activeGroupId ? 'group-chip active' : 'group-chip'}
-            onClick={() => setActiveGroupId(group.id)}
-            onDoubleClick={() => beginGroupRename(group)}
+            className="group-action"
+            onClick={() => beginGroupRename(group)}
+            disabled={groupRenameId === group.id}
           >
-            {group.name}
+            Rename
           </button>
-        )}
-        <small>{entries.length} item{entries.length === 1 ? '' : 's'}</small>
+          <button
+            type="button"
+            className="group-action danger"
+            onClick={() => handleDeleteGroup(group.id)}
+            disabled={group.id === DEFAULT_GROUP_ID}
+          >
+            Delete
+          </button>
+        </div>
       </div>
       <div className="layer-list" onDragOver={(event) => event.preventDefault()}>
         {entries.map((layer) => {
@@ -1021,7 +1049,7 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
   )
 
   const renderLayersPage = () => (
-    <div className="layers-page">
+    <div className="layers-page scrollable">
       <div className="panel-section stack">
         <p className="panel-section-label">Layer intake</p>
         <div className="control-actions">
@@ -1060,7 +1088,11 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
         </div>
       </div>
 
-      {layerGroups.map((group) => renderLayerGroup(group, groupedLayers.get(group.id) ?? []))}
+      {layers.length === 0 ? (
+        <p className="empty-state">No layers yet. Upload GeoJSON to add one.</p>
+      ) : (
+        layerGroups.map((group) => renderLayerGroup(group, groupedLayers.get(group.id) ?? []))
+      )}
 
     </div>
   )
@@ -1135,17 +1167,6 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
 
   const renderCameraPage = () => (
     <div className="panel-section stack">
-      <div>
-        <p className="panel-section-label">Camera orientation</p>
-        <div className="segmented">
-          <button type="button" className={cameraMode === 'north-up' ? 'active' : ''} onClick={() => setCameraMode('north-up')}>
-            North-up
-          </button>
-          <button type="button" className={cameraMode === 'free' ? 'active' : ''} onClick={() => setCameraMode('free')}>
-            Free roam
-          </button>
-        </div>
-      </div>
       <div>
         <p className="panel-section-label">Add Reolink stream</p>
         <input
@@ -1327,26 +1348,30 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
 
       <div className="map-panel">
         <div ref={mapContainerRef} className="map-canvas" />
-        {weather ? (
-          <div className="weather-widget">
-            <p className="weather-title">Field weather</p>
-            <div className="weather-metrics">
-              <div>
-                <span className="weather-value">{Math.round(weather.temperatureF)}°F</span>
-                <span className="weather-label">Temp</span>
-              </div>
-              <div>
-                <span className="weather-value">{Math.round(weather.windMph)} mph</span>
-                <span className="weather-label">Wind</span>
-              </div>
-              <div>
-                <span className="weather-value">{Math.round(weather.humidity)}%</span>
-                <span className="weather-label">Humidity</span>
-              </div>
+        <div className="weather-widget">
+          <p className="weather-title">Field weather</p>
+          <div className="weather-metrics">
+            <div>
+              <span className="weather-value">
+                {weather ? `${Math.round(weather.temperatureF)}°F` : '--'}
+              </span>
+              <span className="weather-label">Temp</span>
+            </div>
+            <div>
+              <span className="weather-value">{weather ? `${Math.round(weather.windMph)} mph` : '--'}</span>
+              <span className="weather-label">Wind</span>
+            </div>
+            <div>
+              <span className="weather-value">{weather ? `${Math.round(weather.humidity)}%` : '--'}</span>
+              <span className="weather-label">Humidity</span>
             </div>
           </div>
-        ) : null}
+          <button type="button" className="weather-launch" onClick={() => setPanelVisible(true)} disabled={panelVisible}>
+            My Farm
+          </button>
+        </div>
 
+        {panelVisible && (
         <Draggable handle=".panel-drag-handle" nodeRef={panelRef}>
           <div ref={panelRef} className="control-panel">
             <div className="panel-header">
@@ -1370,6 +1395,9 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
                   </button>
                 ))}
               </div>
+              <button type="button" className="panel-close" aria-label="Hide panel" onClick={() => setPanelVisible(false)}>
+                ×
+              </button>
             </div>
             <div className="panel-body">{renderPanelContent()}</div>
             {panelPage === 'layers' && layerTooltip ? (
@@ -1379,6 +1407,7 @@ const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill
             ) : null}
           </div>
         </Draggable>
+        )}
 
         {renderMapHoverInfo()}
         {renderCameraPreviewWindow()}

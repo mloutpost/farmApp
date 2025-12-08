@@ -30,7 +30,7 @@ Visit the printed URL (default `http://localhost:5173`) and you will see an inte
   - **My Farm** – sketch helpers reserved for upcoming agronomic widgets.
   - **Layers** – intake GeoJSON, convert sketches, manage/rename layers, hover for stats, tweak styling (including hatch patterns), delete entries.
   - **Settings** – toggle Miles/Km, switch dark/light/system theme, flip between cartographic and satellite basemaps, and configure which feature properties appear on hover.
-  - **Camera** – lock the camera to north-up (default) or free mode and register Reolink streams with GPS coordinates so camera icons/popup links appear directly on the map.
+  - **Camera** – lock the view to north-up or free roam, drop Reolink streams by clicking on the map to set lat/long, rename feeds inline, and pop out draggable live previews from either the list or map markers.
 - Status banner pinned to the top keeps timestamped CLI output left-aligned while right-aligning lat/long, ensuring MapLibre overlays never collide with the HUD.
 
 ## Next Steps

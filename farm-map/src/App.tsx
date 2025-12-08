@@ -45,6 +45,7 @@ const INITIAL_VIEW = {
 const COLOR_PALETTE = ['#7fffd4', '#ffb347', '#7dd3fc', '#f472b6', '#c084fc', '#facc15']
 const LAYER_TOOLTIP_DELAY = 500
 const FEATURE_TOOLTIP_DELAY = 500
+const CAMERA_MARKER_CLASS = 'camera-marker'
 
  type ViewState = {
   lng: number
@@ -86,6 +87,12 @@ type CameraRecord = {
   streamUrl: string
   lat: number
   lng: number
+}
+
+type CameraPreview = {
+  camera: CameraRecord
+  x?: number
+  y?: number
 }
 
 const formatCoord = (value: number, positive: string, negative: string) => `${Math.abs(value).toFixed(3)}°${value >= 0 ? positive : negative}`
@@ -167,6 +174,7 @@ function App() {
   const layerTooltipTimerRef = useRef<number | null>(null)
   const mapHoverTimerRef = useRef<number | null>(null)
   const cameraMarkersRef = useRef<maplibregl.Marker[]>([])
+  const pickCameraLocationRef = useRef(false)
 
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW)
   const [hasSketch, setHasSketch] = useState(false)
@@ -189,6 +197,10 @@ function App() {
   const [hoverInfoFields, setHoverInfoFields] = useState<string[]>(['name', 'crop', 'acres'])
   const [cameras, setCameras] = useState<CameraRecord[]>([])
   const [cameraForm, setCameraForm] = useState({ name: '', streamUrl: '', lat: '', lng: '' })
+  const [cameraPreview, setCameraPreview] = useState<CameraPreview | null>(null)
+  const [pickCameraLocation, setPickCameraLocation] = useState(false)
+  const [cameraRenameId, setCameraRenameId] = useState<string | null>(null)
+  const [cameraRenameDraft, setCameraRenameDraft] = useState('')
   const [styleVersion, setStyleVersion] = useState(0)
 
   const logActivity = (message: string) => {
@@ -199,6 +211,10 @@ function App() {
     const timer = window.setTimeout(() => setShowSplash(false), 1500)
     return () => window.clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    pickCameraLocationRef.current = pickCameraLocation
+  }, [pickCameraLocation])
 
   useEffect(() => {
     const root = document.documentElement
@@ -269,13 +285,29 @@ function App() {
       }
     }
 
+    const handleMapClick = (event: MapMouseEvent) => {
+      if (!pickCameraLocationRef.current) {
+        return
+      }
+      setCameraForm((prev) => ({
+        ...prev,
+        lat: event.lngLat.lat.toFixed(6),
+        lng: event.lngLat.lng.toFixed(6),
+      }))
+      setPickCameraLocation(false)
+      pickCameraLocationRef.current = false
+      logActivity('Camera location captured from map.')
+    }
+
     mapInstance.on('move', updateView)
     mapInstance.on('draw.create', refreshFromDraw)
     mapInstance.on('draw.update', refreshFromDraw)
     mapInstance.on('draw.delete', refreshFromDraw)
     mapInstance.on('load', updateView)
+    mapInstance.on('click', handleMapClick)
 
     return () => {
+      mapInstance.off('click', handleMapClick)
       mapInstance.remove()
       mapRef.current = null
       drawRef.current = null
@@ -394,8 +426,12 @@ function App() {
     cameraMarkersRef.current.forEach((marker) => marker.remove())
     cameraMarkersRef.current = cameras.map((camera) => {
       const el = document.createElement('div')
-      el.className = 'camera-marker'
+      el.className = CAMERA_MARKER_CLASS
       el.innerHTML = '📷'
+      el.addEventListener('click', (event) => {
+        event.stopPropagation()
+        setCameraPreview({ camera, x: event.clientX, y: event.clientY })
+      })
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([camera.lng, camera.lat])
         .setPopup(
@@ -561,11 +597,21 @@ function App() {
     const tooltipX = event.clientX - (rect?.left ?? 0)
     const tooltipY = event.clientY - (rect?.top ?? 0)
     layerTooltipTimerRef.current = window.setTimeout(() => {
+      const sampleProps = layer.data.features[0]?.properties ?? {}
+      const propLines = Object.entries(sampleProps)
+        .filter(([_, value]) => value !== undefined && value !== null)
+        .slice(0, 3)
+        .map(([key, value]) => `${key}: ${value}`)
+      const lines = [
+        `${layer.name}`,
+        `${layer.data.features.length} feature${layer.data.features.length === 1 ? '' : 's'}`,
+        ...propLines,
+      ]
       setLayerTooltip({
         id: layer.id,
         x: tooltipX,
         y: tooltipY,
-        details: `${layer.name}: ${layer.data.features.length} feature${layer.data.features.length === 1 ? '' : 's'}`,
+        details: lines.join('\n'),
       })
     }, LAYER_TOOLTIP_DELAY)
   }
@@ -588,6 +634,7 @@ function App() {
 
     const handleMouseMove = (event: MapMouseEvent) => {
       if (!hoverLayerIds.length) {
+        map.getCanvas().style.cursor = ''
         return
       }
       if (mapHoverTimerRef.current) {
@@ -626,6 +673,16 @@ function App() {
     }
   }, [hoverLayerIds])
 
+  const togglePickCameraLocation = () => {
+    setPickCameraLocation((prev) => {
+      const next = !prev
+      if (next) {
+        logActivity('Click anywhere on the map to assign camera coordinates.')
+      }
+      return next
+    })
+  }
+
   const handleAddCamera = () => {
     if (!cameraForm.name || !cameraForm.streamUrl || !cameraForm.lat || !cameraForm.lng) {
       return
@@ -649,6 +706,12 @@ function App() {
 
   const handleRemoveCamera = (cameraId: string) => {
     setCameras((prev) => prev.filter((camera) => camera.id !== cameraId))
+    if (cameraRenameId === cameraId) {
+      setCameraRenameId(null)
+    }
+    if (cameraPreview?.camera.id === cameraId) {
+      setCameraPreview(null)
+    }
     logActivity('Camera removed.')
   }
 
@@ -657,6 +720,25 @@ function App() {
       return
     }
     mapRef.current.easeTo({ center: [camera.lng, camera.lat], zoom: 16, duration: 800 })
+  }
+
+  const handlePreviewCamera = (camera: CameraRecord) => {
+    setCameraPreview({ camera, x: 220, y: 200 })
+  }
+
+  const beginCameraRename = (camera: CameraRecord) => {
+    setCameraRenameId(camera.id)
+    setCameraRenameDraft(camera.name)
+  }
+
+  const commitCameraRename = () => {
+    if (!cameraRenameId) {
+      return
+    }
+    setCameras((prev) =>
+      prev.map((camera) => (camera.id === cameraRenameId ? { ...camera, name: cameraRenameDraft || camera.name } : camera)),
+    )
+    setCameraRenameId(null)
   }
 
   const renderFarmPage = () => (
@@ -675,6 +757,11 @@ function App() {
             Clear
           </button>
         </div>
+        <div className="control-actions">
+          <button type="button" className="primary-button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
+            Save sketch to layers
+          </button>
+        </div>
         {draftSketch ? (
           <p className="status-subline">Draft contains {draftSketch.features.length} feature{draftSketch.features.length === 1 ? '' : 's'}.</p>
         ) : null}
@@ -686,11 +773,8 @@ function App() {
     <div className="panel-section">
       <p className="panel-section-label">Intake</p>
       <div className="control-actions">
-        <button type="button" onClick={handleUploadClick} disabled={isUploading}>
+        <button type="button" className="primary-button" onClick={handleUploadClick} disabled={isUploading}>
           {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
-        </button>
-        <button type="button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
-          Save sketch
         </button>
       </div>
       <input ref={fileInputRef} type="file" accept=".geojson,.json" className="sr-only" onChange={handleFileChange} />
@@ -906,9 +990,18 @@ function App() {
             onChange={(event) => setCameraForm((prev) => ({ ...prev, lng: event.target.value }))}
           />
         </div>
-        <button type="button" onClick={handleAddCamera}>
-          Add camera
-        </button>
+        <div className="control-actions">
+          <button
+            type="button"
+            className={pickCameraLocation ? 'primary-button picking' : 'primary-button'}
+            onClick={togglePickCameraLocation}
+          >
+            {pickCameraLocation ? 'Click on map…' : 'Pick from map'}
+          </button>
+          <button type="button" className="primary-button" onClick={handleAddCamera}>
+            Add camera
+          </button>
+        </div>
       </div>
       <div>
         <p className="panel-section-label">Cameras</p>
@@ -916,18 +1009,33 @@ function App() {
           <p className="empty-state">No cameras yet.</p>
         ) : (
           cameras.map((camera) => (
-            <div key={camera.id} className="camera-row">
+            <div key={camera.id} className="camera-row info-hover">
               <div>
-                <p>{camera.name}</p>
+                {cameraRenameId === camera.id ? (
+                  <input
+                    value={cameraRenameDraft}
+                    onChange={(event) => setCameraRenameDraft(event.target.value)}
+                    onBlur={commitCameraRename}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        commitCameraRename()
+                      } else if (event.key === 'Escape') {
+                        setCameraRenameId(null)
+                      }
+                    }}
+                  />
+                ) : (
+                  <p onDoubleClick={() => beginCameraRename(camera)}>{camera.name}</p>
+                )}
                 <small>{camera.lat.toFixed(4)}, {camera.lng.toFixed(4)}</small>
               </div>
               <div className="camera-actions">
                 <button type="button" onClick={() => handleFocusCamera(camera)}>
                   Focus
                 </button>
-                <a href={camera.streamUrl} target="_blank" rel="noreferrer">
-                  Stream
-                </a>
+                <button type="button" onClick={() => handlePreviewCamera(camera)}>
+                  Preview
+                </button>
                 <button type="button" onClick={() => handleRemoveCamera(camera.id)}>
                   Remove
                 </button>
@@ -952,12 +1060,40 @@ function App() {
     return renderFarmPage()
   }
 
+  const renderCameraPreviewWindow = () => {
+    if (!cameraPreview) {
+      return null
+    }
+    return (
+      <Draggable defaultPosition={{ x: cameraPreview.x ?? 220, y: cameraPreview.y ?? 220 }}>
+        <div className="camera-preview-window">
+          <div className="camera-preview-header">
+            <p>{cameraPreview.camera.name}</p>
+            <button type="button" onClick={() => setCameraPreview(null)}>
+              ×
+            </button>
+          </div>
+          <div className="camera-preview-body">
+            <iframe
+              title={cameraPreview.camera.name}
+              src={cameraPreview.camera.streamUrl}
+              allow="autoplay; encrypted-media; picture-in-picture"
+            />
+            <a href={cameraPreview.camera.streamUrl} target="_blank" rel="noreferrer">
+              Open stream
+            </a>
+          </div>
+        </div>
+      </Draggable>
+    )
+  }
+
   const renderMapHoverInfo = () => {
     if (!mapHoverInfo) {
       return null
     }
     const properties = mapHoverInfo.feature.properties ?? {}
-    const rows = hoverInfoFields
+    let rows = hoverInfoFields
       .map((field) => {
         const value = properties?.[field]
         if (value === undefined || value === null) {
@@ -971,6 +1107,17 @@ function App() {
         )
       })
       .filter(Boolean)
+
+    if (!rows.length) {
+      rows = Object.entries(properties)
+        .slice(0, 3)
+        .map(([field, value]) => (
+          <div key={field}>
+            <span className="hover-key">{field}</span>
+            <span className="hover-value">{String(value)}</span>
+          </div>
+        ))
+    }
 
     if (!rows.length) {
       return null
@@ -1038,6 +1185,7 @@ function App() {
         </Draggable>
 
         {renderMapHoverInfo()}
+        {renderCameraPreviewWindow()}
       </div>
     </div>
   )

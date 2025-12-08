@@ -192,6 +192,28 @@
   gap: 0.6rem;
 }
 
+.layer-group {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.layer-group + .layer-group {
+  margin-top: 0.8rem;
+}
+
+.layer-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
 .layer-block {
   display: flex;
   flex-direction: column;

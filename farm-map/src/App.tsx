@@ -46,6 +46,9 @@ const COLOR_PALETTE = ['#7fffd4', '#ffb347', '#7dd3fc', '#f472b6', '#c084fc', '#
 const LAYER_TOOLTIP_DELAY = 500
 const FEATURE_TOOLTIP_DELAY = 500
 const CAMERA_MARKER_CLASS = 'camera-marker'
+const SOIL_SOURCE_ID = 'soil-overlay-source'
+const SOIL_LAYER_ID = 'soil-overlay-layer'
+const DEFAULT_HOVER_FIELDS = ['name', 'crop', 'acres']
 
  type ViewState = {
   lng: number
@@ -57,10 +60,13 @@ type PanelPage = 'farm' | 'layers' | 'settings' | 'camera'
 type HatchPattern = 'solid' | 'diagonal' | 'cross'
 type CameraMode = 'north-up' | 'free'
 
+type LayerSourceType = 'sketch' | 'upload'
+
 type LayerRecord = {
   id: string
   name: string
   data: FeatureCollection
+  sourceType: LayerSourceType
   fillColor: string
   lineColor: string
   fillOpacity: number
@@ -194,14 +200,15 @@ function App() {
   const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [mapHoverInfo, setMapHoverInfo] = useState<MapHoverInfo | null>(null)
-  const [hoverInfoFields, setHoverInfoFields] = useState<string[]>(['name', 'crop', 'acres'])
   const [cameras, setCameras] = useState<CameraRecord[]>([])
   const [cameraForm, setCameraForm] = useState({ name: '', streamUrl: '', lat: '', lng: '' })
   const [cameraPreview, setCameraPreview] = useState<CameraPreview | null>(null)
   const [pickCameraLocation, setPickCameraLocation] = useState(false)
   const [cameraRenameId, setCameraRenameId] = useState<string | null>(null)
   const [cameraRenameDraft, setCameraRenameDraft] = useState('')
+  const [showSoilLayer, setShowSoilLayer] = useState(false)
   const [styleVersion, setStyleVersion] = useState(0)
+  const cameraPreviewRef = useRef<HTMLDivElement | null>(null)
 
   const logActivity = (message: string) => {
     setActivityMessage(`[${formatTimestamp()}] ${message}`)
@@ -418,6 +425,50 @@ function App() {
     }
   }, [renderLayersOnMap, styleVersion])
 
+  const syncSoilOverlay = useCallback(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) {
+      return
+    }
+    const anchorLayerId = layers.length ? `${layers[0].id}-fill` : undefined
+    if (showSoilLayer) {
+      if (!map.getSource(SOIL_SOURCE_ID)) {
+        map.addSource(SOIL_SOURCE_ID, {
+          type: 'raster',
+          tiles: ['https://gis.nrcs.usda.gov/server/services/Soils/SSURGO_Landscape/MapServer/tile/{z}/{y}/{x}'],
+          tileSize: 256,
+          attribution: 'USDA NRCS',
+        })
+      }
+      if (!map.getLayer(SOIL_LAYER_ID)) {
+        map.addLayer(
+          {
+            id: SOIL_LAYER_ID,
+            type: 'raster',
+            source: SOIL_SOURCE_ID,
+            paint: { 'raster-opacity': 0.65 },
+          },
+          anchorLayerId,
+        )
+      }
+    } else {
+      if (map.getLayer(SOIL_LAYER_ID)) {
+        map.removeLayer(SOIL_LAYER_ID)
+      }
+      if (map.getSource(SOIL_SOURCE_ID)) {
+        map.removeSource(SOIL_SOURCE_ID)
+      }
+    }
+  }, [layers, showSoilLayer])
+
+  useEffect(() => {
+    syncSoilOverlay()
+  }, [syncSoilOverlay, styleVersion])
+
+  useEffect(() => {
+    logActivity(showSoilLayer ? 'Soil survey overlay enabled.' : 'Soil survey overlay hidden.')
+  }, [showSoilLayer])
+
   const renderCamerasOnMap = useCallback(() => {
     const map = mapRef.current
     if (!map || !map.isStyleLoaded()) {
@@ -460,7 +511,7 @@ function App() {
     mapRef.current.fitBounds(bounds, { padding: 80, duration: 800 })
   }
 
-  const addLayerFromData = (data: FeatureCollection, name?: string) => {
+  const addLayerFromData = (data: FeatureCollection, name?: string, sourceType: LayerSourceType = 'upload') => {
     if (!data.features.length) {
       logActivity('Uploaded GeoJSON had no features.')
       return
@@ -470,6 +521,7 @@ function App() {
       id: `layer-${Date.now()}-${index}`,
       name: name?.replace(/\.[^/.]+$/, '') || `Layer ${index + 1}`,
       data,
+      sourceType,
       fillColor: COLOR_PALETTE[index % COLOR_PALETTE.length],
       lineColor: '#ffffff',
       fillOpacity: 0.25,
@@ -549,7 +601,7 @@ function App() {
     if (!sketch || !sketch.features.length) {
       return
     }
-    addLayerFromData(sketch, `Sketch ${layers.length + 1}`)
+    addLayerFromData(sketch, `Sketch ${layers.length + 1}`, 'sketch')
     drawRef.current?.deleteAll()
     setDraftSketch(null)
     setHasSketch(false)
@@ -624,7 +676,7 @@ function App() {
     setLayerTooltip(null)
   }
 
-  const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill`, `${layer.id}-line`]), [layers])
+const hoverLayerIds = useMemo(() => layers.flatMap((layer) => [`${layer.id}-fill`, `${layer.id}-line`]), [layers])
 
   useEffect(() => {
     const map = mapRef.current
@@ -677,6 +729,7 @@ function App() {
     setPickCameraLocation((prev) => {
       const next = !prev
       if (next) {
+        drawRef.current?.changeMode('simple_select')
         logActivity('Click anywhere on the map to assign camera coordinates.')
       }
       return next
@@ -769,129 +822,162 @@ function App() {
     </>
   )
 
-  const renderLayerIntake = () => (
-    <div className="panel-section">
-      <p className="panel-section-label">Intake</p>
-      <div className="control-actions">
-        <button type="button" className="primary-button" onClick={handleUploadClick} disabled={isUploading}>
-          {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
-        </button>
+  const renderLayerGroup = (title: string, entries: LayerRecord[]) => (
+    <div className="layer-group" key={title}>
+      <div className="layer-group-header">
+        <p>{title}</p>
+        <small>{entries.length} item{entries.length === 1 ? '' : 's'}</small>
       </div>
-      <input ref={fileInputRef} type="file" accept=".geojson,.json" className="sr-only" onChange={handleFileChange} />
-      {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+      <div className="layer-list">
+        {entries.map((layer) => {
+          const expanded = expandedLayerId === layer.id
+          return (
+            <div key={layer.id} className={`layer-block ${expanded ? 'expanded' : ''}`}>
+              <button
+                type="button"
+                className={expanded ? 'layer-row active info-hover' : 'layer-row info-hover'}
+                onClick={() => handleLayerClick(layer)}
+                onDoubleClick={() => beginRename(layer)}
+                onMouseEnter={(event) => handleLayerMouseEnter(layer, event)}
+                onMouseLeave={handleLayerMouseLeave}
+              >
+                {renamingLayerId === layer.id ? (
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        commitRename()
+                      } else if (event.key === 'Escape') {
+                        setRenamingLayerId(null)
+                      }
+                    }}
+                  />
+                ) : (
+                  <span>{layer.name}</span>
+                )}
+                <small>{layer.data.features.length} feature{layer.data.features.length === 1 ? '' : 's'}</small>
+              </button>
+              {expanded ? (
+                <div className="layer-editor">
+                  <div className="style-row">
+                    <label>
+                      Fill
+                      <input
+                        type="color"
+                        value={layer.fillColor}
+                        onChange={(event) => handleLayerStyleChange(layer.id, { fillColor: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      Line
+                      <input
+                        type="color"
+                        value={layer.lineColor}
+                        onChange={(event) => handleLayerStyleChange(layer.id, { lineColor: event.target.value })}
+                      />
+                    </label>
+                  </div>
+                  <div className="style-row sliders">
+                    <label>
+                      Fill opacity
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={layer.fillOpacity}
+                        onChange={(event) => handleLayerStyleChange(layer.id, { fillOpacity: Number(event.target.value) })}
+                      />
+                    </label>
+                    <label>
+                      Line width
+                      <input
+                        type="range"
+                        min="1"
+                        max="8"
+                        step="0.5"
+                        value={layer.lineWidth}
+                        onChange={(event) => handleLayerStyleChange(layer.id, { lineWidth: Number(event.target.value) })}
+                      />
+                    </label>
+                  </div>
+                  <label className="selector">
+                    Hatching
+                    <select
+                      value={layer.hatchPattern}
+                      onChange={(event) => handleLayerStyleChange(layer.id, { hatchPattern: event.target.value as HatchPattern })}
+                    >
+                      <option value="solid">Solid</option>
+                      <option value="diagonal">Diagonal</option>
+                      <option value="cross">Cross</option>
+                    </select>
+                  </label>
+                  <button type="button" className="danger-button" onClick={() => handleLayerDelete(layer.id)}>
+                    Delete layer
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 
-  const renderLayersPage = () => (
-    <div className="layers-page">
-      {renderLayerIntake()}
-      <div className="layer-list">
+  const renderLayersPage = () => {
+    const grouped = new globalThis.Map<string, LayerRecord[]>()
+    layers.forEach((layer) => {
+      const group = layer.sourceType === 'sketch' ? 'Sketches' : 'Imported layers'
+      if (!grouped.has(group)) {
+        grouped.set(group, [])
+      }
+      grouped.get(group)!.push(layer)
+    })
+
+    return (
+      <div className="layers-page">
+        <div className="panel-section">
+          <p className="panel-section-label">Sketch tools</p>
+          <div className="control-actions">
+            <button type="button" onClick={handleStartDrawing}>
+              Draw
+            </button>
+            <button type="button" onClick={handleFinishDrawing}>
+              Finish
+            </button>
+            <button type="button" onClick={handleClearSketch} disabled={!hasSketch}>
+              Clear
+            </button>
+          </div>
+          <div className="control-actions">
+            <button type="button" className="primary-button" onClick={handleSaveSketchAsLayer} disabled={!hasSketch}>
+              Save sketch to layers
+            </button>
+            <button type="button" className="primary-button" onClick={handleUploadClick} disabled={isUploading}>
+              {isUploading ? 'Uploading…' : 'Upload GeoJSON'}
+            </button>
+          </div>
+          <input ref={fileInputRef} type="file" accept=".geojson,.json" className="sr-only" onChange={handleFileChange} />
+          {lastFileName ? <p className="status-subline">Last import: {lastFileName}</p> : null}
+        </div>
+
         {layers.length === 0 ? (
           <p className="empty-state">No layers yet. Upload GeoJSON to add one.</p>
         ) : (
-          layers.map((layer) => {
-            const expanded = expandedLayerId === layer.id
-            return (
-              <div key={layer.id} className={`layer-block ${expanded ? 'expanded' : ''}`}>
-                <button
-                  type="button"
-                  className={expanded ? 'layer-row active info-hover' : 'layer-row info-hover'}
-                  onClick={() => handleLayerClick(layer)}
-                  onDoubleClick={() => beginRename(layer)}
-                  onMouseEnter={(event) => handleLayerMouseEnter(layer, event)}
-                  onMouseLeave={handleLayerMouseLeave}
-                >
-                  {renamingLayerId === layer.id ? (
-                    <input
-                      autoFocus
-                      value={renameDraft}
-                      onChange={(event) => setRenameDraft(event.target.value)}
-                      onBlur={commitRename}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          commitRename()
-                        } else if (event.key === 'Escape') {
-                          setRenamingLayerId(null)
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span>{layer.name}</span>
-                  )}
-                  <small>{layer.data.features.length} feature{layer.data.features.length === 1 ? '' : 's'}</small>
-                </button>
-                {expanded ? (
-                  <div className="layer-editor">
-                    <div className="style-row">
-                      <label>
-                        Fill
-                        <input
-                          type="color"
-                          value={layer.fillColor}
-                          onChange={(event) => handleLayerStyleChange(layer.id, { fillColor: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        Line
-                        <input
-                          type="color"
-                          value={layer.lineColor}
-                          onChange={(event) => handleLayerStyleChange(layer.id, { lineColor: event.target.value })}
-                        />
-                      </label>
-                    </div>
-                    <div className="style-row sliders">
-                      <label>
-                        Fill opacity
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={layer.fillOpacity}
-                          onChange={(event) => handleLayerStyleChange(layer.id, { fillOpacity: Number(event.target.value) })}
-                        />
-                      </label>
-                      <label>
-                        Line width
-                        <input
-                          type="range"
-                          min="1"
-                          max="8"
-                          step="0.5"
-                          value={layer.lineWidth}
-                          onChange={(event) => handleLayerStyleChange(layer.id, { lineWidth: Number(event.target.value) })}
-                        />
-                      </label>
-                    </div>
-                    <label className="selector">
-                      Hatching
-                      <select
-                        value={layer.hatchPattern}
-                        onChange={(event) => handleLayerStyleChange(layer.id, { hatchPattern: event.target.value as HatchPattern })}
-                      >
-                        <option value="solid">Solid</option>
-                        <option value="diagonal">Diagonal</option>
-                        <option value="cross">Cross</option>
-                      </select>
-                    </label>
-                    <button type="button" className="danger-button" onClick={() => handleLayerDelete(layer.id)}>
-                      Delete layer
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            )
-          })
+          Array.from(grouped.entries()).map(([title, entries]) => renderLayerGroup(title, entries))
         )}
+
+        {layerTooltip && layerTooltip.id ? (
+          <div className="layer-tooltip" style={{ left: layerTooltip.x, top: layerTooltip.y }}>
+            {layerTooltip.details}
+          </div>
+        ) : null}
       </div>
-      {layerTooltip && layerTooltip.id ? (
-        <div className="layer-tooltip" style={{ left: layerTooltip.x, top: layerTooltip.y }}>
-          {layerTooltip.details}
-        </div>
-      ) : null}
-    </div>
-  )
+    )
+  }
 
   const renderSettingsPage = () => (
     <div className="panel-section stack">
@@ -932,19 +1018,18 @@ function App() {
         </div>
       </div>
       <div>
-        <p className="panel-section-label">Hover fields</p>
-        <input
-          className="text-input"
-          value={hoverInfoFields.join(', ')}
-          onChange={(event) => {
-            const fields = event.target.value
-              .split(',')
-              .map((item) => item.trim())
-              .filter(Boolean)
-            setHoverInfoFields(fields.length ? fields : ['name'])
-          }}
-        />
-        <small className="status-subline">Comma-separated property keys shown on hover.</small>
+        <p className="panel-section-label">Soil survey overlay</p>
+        <div className="segmented">
+          <button type="button" className={!showSoilLayer ? 'active' : ''} onClick={() => setShowSoilLayer(false)}>
+            Hidden
+          </button>
+          <button type="button" className={showSoilLayer ? 'active' : ''} onClick={() => setShowSoilLayer(true)}>
+            Visible
+          </button>
+        </div>
+        <small className="status-subline">
+          Data from USDA NRCS Web Soil Survey (SSURGO Landcape). Renders beneath your layers.
+        </small>
       </div>
     </div>
   )
@@ -1065,8 +1150,8 @@ function App() {
       return null
     }
     return (
-      <Draggable defaultPosition={{ x: cameraPreview.x ?? 220, y: cameraPreview.y ?? 220 }}>
-        <div className="camera-preview-window">
+      <Draggable defaultPosition={{ x: cameraPreview.x ?? 220, y: cameraPreview.y ?? 220 }} nodeRef={cameraPreviewRef}>
+        <div ref={cameraPreviewRef} className="camera-preview-window">
           <div className="camera-preview-header">
             <p>{cameraPreview.camera.name}</p>
             <button type="button" onClick={() => setCameraPreview(null)}>
@@ -1093,31 +1178,24 @@ function App() {
       return null
     }
     const properties = mapHoverInfo.feature.properties ?? {}
-    let rows = hoverInfoFields
-      .map((field) => {
-        const value = properties?.[field]
-        if (value === undefined || value === null) {
-          return null
-        }
-        return (
-          <div key={field}>
-            <span className="hover-key">{field}</span>
-            <span className="hover-value">{String(value)}</span>
-          </div>
-        )
-      })
-      .filter(Boolean)
+    const prioritized = DEFAULT_HOVER_FIELDS.filter((field) => properties?.[field] !== undefined && properties?.[field] !== null)
 
-    if (!rows.length) {
-      rows = Object.entries(properties)
-        .slice(0, 3)
-        .map(([field, value]) => (
-          <div key={field}>
-            <span className="hover-key">{field}</span>
-            <span className="hover-value">{String(value)}</span>
-          </div>
-        ))
-    }
+    const rows =
+      prioritized.length > 0
+        ? prioritized.map((field) => (
+            <div key={field}>
+              <span className="hover-key">{field}</span>
+              <span className="hover-value">{String(properties[field])}</span>
+            </div>
+          ))
+        : Object.entries(properties)
+            .slice(0, 3)
+            .map(([field, value]) => (
+              <div key={field}>
+                <span className="hover-key">{field}</span>
+                <span className="hover-value">{String(value)}</span>
+              </div>
+            ))
 
     if (!rows.length) {
       return null

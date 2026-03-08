@@ -3,10 +3,12 @@
 import { useEffect, useRef } from "react";
 import { useMapStore } from "@/store/map-store";
 import { useMap } from "@/contexts/MapContext";
+import { NODE_KIND_COLORS } from "@/types";
 
 export default function DrawingOverlay() {
   const map = useMap();
-  const { drawMode, pendingGeometry } = useMapStore();
+  const { drawMode, pendingGeometry, pendingParentId } = useMapStore();
+  const drawColor = pendingParentId ? NODE_KIND_COLORS.bed : "#22c55e";
   const polylineRef = useRef<google.maps.Polyline | null>(null);
   const polygonRef = useRef<google.maps.Polygon | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
@@ -35,9 +37,9 @@ export default function DrawingOverlay() {
         polygonRef.current = new google.maps.Polygon({
           paths: path,
           map,
-          fillColor: "#22c55e",
+          fillColor: drawColor,
           fillOpacity: 0.15,
-          strokeColor: "#22c55e",
+          strokeColor: drawColor,
           strokeOpacity: 0.9,
           strokeWeight: 2,
           clickable: false,
@@ -47,7 +49,7 @@ export default function DrawingOverlay() {
         polylineRef.current = new google.maps.Polyline({
           path,
           map,
-          strokeColor: pendingGeometry.type === "Polygon" ? "#22c55e" : "#22d3ee",
+          strokeColor: pendingGeometry.type === "Polygon" ? drawColor : "#22d3ee",
           strokeOpacity: 0.9,
           strokeWeight: 2.5,
           clickable: false,
@@ -63,9 +65,9 @@ export default function DrawingOverlay() {
           icon: {
             path: google.maps.SymbolPath.CIRCLE,
             scale: isFirst ? 7 : 5,
-            fillColor: isFirst ? "#ffffff" : "#22c55e",
-            fillOpacity: 1,
-            strokeColor: "#22c55e",
+          fillColor: isFirst ? "#ffffff" : drawColor,
+          fillOpacity: 1,
+          strokeColor: drawColor,
             strokeWeight: 2,
           },
           clickable: false,
@@ -101,7 +103,7 @@ export default function DrawingOverlay() {
       polygonRef.current?.setMap(null);
       markersRef.current.forEach((m) => m.setMap(null));
     };
-  }, [map, drawMode, pendingGeometry]);
+  }, [map, drawMode, pendingGeometry, pendingParentId]);
 
   return null;
 }

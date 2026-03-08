@@ -73,17 +73,26 @@ export function useSyncFarmToMap() {
 
   useEffect(() => {
     rebuildMapLayers();
-    prevCountRef.current = useFarmStore.getState().nodes.length;
+    const nodes = useFarmStore.getState().nodes;
+    prevCountRef.current = nodes.length;
+    if (nodes.length > 0) {
+      useMapStore.getState().setFitToFarmBounds(true);
+    }
     prevFpRef.current = fingerprint();
     prevEditingRef.current = useMapStore.getState().editingNodeId;
 
     const unsubFarm = useFarmStore.subscribe((state) => {
       const countChanged = state.nodes.length !== prevCountRef.current;
+      const hadNoNodes = prevCountRef.current <= 0;
+      const nowHasNodes = state.nodes.length > 0;
       prevCountRef.current = state.nodes.length;
 
       if (countChanged) {
         prevFpRef.current = fingerprint();
         rebuildMapLayers();
+        if (hadNoNodes && nowHasNodes) {
+          useMapStore.getState().setFitToFarmBounds(true);
+        }
         return;
       }
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useFarmStore } from "@/store/farm-store";
+import { useMapStore } from "@/store/map-store";
 import { fromFirestoreDocument } from "@/lib/farm-serialize";
 
 export default function LoadDemoBanner() {
@@ -30,6 +31,7 @@ export default function LoadDemoBanner() {
             profile: { ...useFarmStore.getState().profile, ...(data.profile as object) },
           });
         }
+        useMapStore.getState().setFitToFarmBounds(true);
         setDismissed(true);
       }
     } catch {

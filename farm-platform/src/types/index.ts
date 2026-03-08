@@ -47,7 +47,7 @@ export const NODE_KIND_LABELS: Record<NodeKind, string> = {
 
 export const NODE_KIND_COLORS: Record<NodeKind, string> = {
   garden: "#22c55e",
-  bed: "#16a34a",
+  bed: "#92400e",
   field: "#84cc16",
   pasture: "#a3e635",
   orchard: "#4ade80",

@@ -25,6 +25,8 @@ interface MapState {
   editingNodeId: string | null;
   /** When set, map will fit to this layer's bounds after adding */
   fitToLayerId: string | null;
+  /** When true, map will fit to all farm node bounds (e.g. after load demo or initial load) */
+  fitToFarmBounds: boolean;
   /** Last survey import: { filename, success } for display on nodes page */
   lastImport: { filename: string; success: boolean } | null;
   /** Selected map node for right panel */
@@ -45,6 +47,7 @@ interface MapState {
   setZoom: (zoom: number) => void;
   setLayers: (layers: MapLayer[]) => void;
   setFitToLayerId: (id: string | null) => void;
+  setFitToFarmBounds: (v: boolean) => void;
   toggleLayerVisibility: (layerId: string) => void;
   setLayerOpacity: (layerId: string, opacity: number) => void;
   setActiveLayer: (layerId: string | null) => void;
@@ -101,6 +104,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   completedGeometry: null,
   editingNodeId: null,
   fitToLayerId: null,
+  fitToFarmBounds: false,
   lastImport: null,
   selectedMapNodeId: null,
   mapMarkers: [],
@@ -128,6 +132,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   setZoom: (zoom) => set({ zoom }),
   setLayers: (layers) => set({ layers }),
   setFitToLayerId: (fitToLayerId) => set({ fitToLayerId }),
+  setFitToFarmBounds: (fitToFarmBounds) => set({ fitToFarmBounds }),
   toggleLayerVisibility: (layerId) =>
     set((state) => ({
       layers: state.layers.map((l) =>

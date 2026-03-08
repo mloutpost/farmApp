@@ -46,7 +46,8 @@ export default function TypePickerModal() {
   const addNode = useFarmStore((s) => s.addNode);
   const updateNodeData = useFarmStore((s) => s.updateNodeData);
   const profile = useFarmStore((s) => s.profile);
-  const gardens = useFarmStore((s) => s.nodes.filter((n) => n.kind === "garden"));
+  const allNodes = useFarmStore((s) => s.nodes);
+  const gardens = useMemo(() => allNodes.filter((n) => n.kind === "garden"), [allNodes]);
   const [kind, setKind] = useState<NodeKind | "">(pendingParentId ? "bed" : "");
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string>(pendingParentId ?? "");

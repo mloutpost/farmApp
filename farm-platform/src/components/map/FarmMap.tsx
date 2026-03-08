@@ -19,6 +19,8 @@ function MapLayers({ map }: { map: google.maps.Map | null }) {
   const layers = useMapStore((s) => s.layers);
   const fitToLayerId = useMapStore((s) => s.fitToLayerId);
   const setFitToLayerId = useMapStore((s) => s.setFitToLayerId);
+  const fitToFarmBounds = useMapStore((s) => s.fitToFarmBounds);
+  const setFitToFarmBounds = useMapStore((s) => s.setFitToFarmBounds);
   const editingNodeId = useMapStore((s) => s.editingNodeId);
   const setEditingNodeId = useMapStore((s) => s.setEditingNodeId);
   const drawMode = useMapStore((s) => s.drawMode);
@@ -58,6 +60,33 @@ function MapLayers({ map }: { map: google.maps.Map | null }) {
       }
     });
 
+    // Fit to all farm node bounds (e.g. after load demo or initial load)
+    if (fitToFarmBounds) {
+      const nodeLayers = layers.filter((l) => l.id.startsWith("node-") && l.visible && l.geojson);
+      const allFeatures = nodeLayers.flatMap((l) => {
+        const g = l.geojson as FeatureCollection;
+        return g?.features ?? [];
+      });
+      const mapMarkers = useMapStore.getState().mapMarkers;
+      const hiddenIds = useMapStore.getState().hiddenMarkerIds;
+      const visibleMarkers = mapMarkers.filter((m) => !hiddenIds.has(m.id));
+      const markerFeatures = visibleMarkers.map((m) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [m.lng, m.lat] },
+        properties: {},
+      }));
+      const combined = [...allFeatures, ...markerFeatures];
+      if (combined.length > 0) {
+        const merged: FeatureCollection = { type: "FeatureCollection", features: combined };
+        const bounds = getGeoJsonBounds(merged);
+        if (bounds) {
+          const [minLng, minLat, maxLng, maxLat] = bounds;
+          map.fitBounds({ east: maxLng, west: minLng, north: maxLat, south: minLat }, 40);
+        }
+      }
+      setFitToFarmBounds(false);
+    }
+
     data.setStyle((f) => {
       const kind = f.getProperty?.("kind") as string | undefined;
       const nodeId = f.getProperty?.("nodeId") as string | undefined;
@@ -82,18 +111,22 @@ function MapLayers({ map }: { map: google.maps.Map | null }) {
       };
     });
 
-    const clickHandler = data.addListener("click", (e: google.maps.Data.MouseEvent) => {
-      if (drawMode !== "none") return;
-      const nodeId = e.feature.getProperty?.("nodeId") as string | undefined;
-      if (typeof nodeId === "string") {
-        setEditingNodeId(nodeId);
-      }
-    });
+    // Only add click listener when not drawing – otherwise Data layer captures clicks
+    // and prevents drawing on top of existing polygons (e.g. beds inside a garden)
+    let clickHandler: google.maps.MapsEventListener | null = null;
+    if (drawMode === "none") {
+      clickHandler = data.addListener("click", (e: google.maps.Data.MouseEvent) => {
+        const nodeId = e.feature.getProperty?.("nodeId") as string | undefined;
+        if (typeof nodeId === "string") {
+          setEditingNodeId(nodeId);
+        }
+      });
+    }
 
     return () => {
-      google.maps.event.removeListener(clickHandler);
+      if (clickHandler) google.maps.event.removeListener(clickHandler);
     };
-  }, [map, layers, fitToLayerId, setFitToLayerId, router, editingNodeId, setEditingNodeId, drawMode]);
+  }, [map, layers, fitToLayerId, setFitToLayerId, fitToFarmBounds, setFitToFarmBounds, router, editingNodeId, setEditingNodeId, drawMode]);
 
   return null;
 }

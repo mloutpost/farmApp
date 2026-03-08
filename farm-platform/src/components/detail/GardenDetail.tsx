@@ -172,7 +172,8 @@ function BedSection({ bed, nodeId }: { bed: Bed; nodeId: string }) {
 export default function GardenDetail({ node }: { node: FarmNode }) {
   const router = useRouter();
   const updateNodeData = useFarmStore((s) => s.updateNodeData);
-  const childBeds = useFarmStore((s) => s.nodes.filter((n) => n.parentId === node.id && n.kind === "bed"));
+  const allNodes = useFarmStore((s) => s.nodes);
+  const childBeds = useMemo(() => allNodes.filter((n) => n.parentId === node.id && n.kind === "bed"), [allNodes, node.id]);
   const data = node.data as GardenData;
 
   const geoInfo = useMemo(() => {

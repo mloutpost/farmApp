@@ -18,7 +18,11 @@ export function useGoogleMapsApiKey(): { key: string; loading: boolean } {
       return;
     }
     getAppSettings().then((s) => {
-      setKey(s.googleMapsApiKey ?? "");
+      const k = s.googleMapsApiKey ?? "";
+      if (!k) {
+        console.warn("[Farm] No Google Maps API key. Add to .env.local (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) or Firestore app_settings/main (googleMapsApiKey).");
+      }
+      setKey(k);
       setLoading(false);
     });
   }, []);

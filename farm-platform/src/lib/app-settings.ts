@@ -19,7 +19,8 @@ export async function getAppSettings(): Promise<AppSettings> {
     const snap = await getDoc(doc(db, "app_settings", "main"));
     cached = snap.exists() ? (snap.data() as AppSettings) : {};
     return cached ?? {};
-  } catch {
+  } catch (e) {
+    console.warn("[Farm] Failed to load app_settings from Firestore:", e);
     return {};
   }
 }

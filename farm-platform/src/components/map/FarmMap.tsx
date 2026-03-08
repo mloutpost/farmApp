@@ -217,6 +217,7 @@ function MapLoader({ apiKey }: { apiKey: string }) {
 
   if (loadError) {
     const msg = loadError.message ?? String(loadError);
+    console.error("[Farm] Map load error:", msg);
     const isReferrerError = /referrer|RefererNotAllowed|restrict/i.test(msg);
     return (
       <div className="flex h-full w-full items-center justify-center bg-bg-elevated p-6">

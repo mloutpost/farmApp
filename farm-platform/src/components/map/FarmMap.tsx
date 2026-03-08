@@ -153,19 +153,26 @@ function MapWithLayers() {
   const currentDrawMode = useMapStore((s) => s.drawMode);
 
   const [initialCenter] = useState(() => {
+    const store = useMapStore.getState();
+    if (store.mapViewInitialized) {
+      return { lat: store.center[1], lng: store.center[0] };
+    }
     const profile = useFarmStore.getState().profile;
     if (profile.locationLat != null && profile.locationLng != null) {
       return { lat: profile.locationLat, lng: profile.locationLng };
     }
-    const c = useMapStore.getState().center;
-    return { lat: c[1], lng: c[0] };
+    return { lat: store.center[1], lng: store.center[0] };
   });
   const [initialZoom] = useState(() => {
+    const store = useMapStore.getState();
+    if (store.mapViewInitialized) {
+      return store.zoom;
+    }
     const profile = useFarmStore.getState().profile;
     if (profile.locationLat != null && profile.locationLng != null) {
       return profile.defaultZoom ?? 17;
     }
-    return useMapStore.getState().zoom;
+    return store.zoom;
   });
 
   useEffect(() => {
@@ -193,13 +200,15 @@ function MapWithLayers() {
   const onIdle = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
+    const store = useMapStore.getState();
     const c = map.getCenter?.();
-    if (c) useMapStore.getState().setCenter([c.lng(), c.lat()]);
+    if (c) store.setCenter([c.lng(), c.lat()]);
     const z = map.getZoom?.();
     if (z != null) {
-      useMapStore.getState().setZoom(z);
+      store.setZoom(z);
       setCurrentZoom(z);
     }
+    if (!store.mapViewInitialized) store.setMapViewInitialized();
   }, []);
 
   return (

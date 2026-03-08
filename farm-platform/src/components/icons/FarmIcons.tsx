@@ -387,6 +387,19 @@ export function IconBuilding({ size = 14 }: { size?: number }) {
   );
 }
 
+export function IconHydrant({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="M12 7v3" />
+      <circle cx="12" cy="13" r="3" />
+      <path d="M6 13h3M15 13h3" />
+      <path d="M10 16h4v5h-4z" />
+      <path d="M8 21h8" />
+    </svg>
+  );
+}
+
 export function IconRainwater({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
@@ -422,6 +435,7 @@ const KIND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   cellar: IconCellar,
   smokehouse: IconSmokehouse,
   rainwater: IconRainwater,
+  hydrant: IconHydrant,
   irrigation: IconStream,
   fence: IconEquipment,
   stream: IconStream,

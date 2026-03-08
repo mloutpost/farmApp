@@ -39,6 +39,7 @@ import CoopDetail from "@/components/detail/CoopDetail";
 import CellarDetail from "@/components/detail/CellarDetail";
 import SmokehouseDetail from "@/components/detail/SmokehouseDetail";
 import RainwaterDetail from "@/components/detail/RainwaterDetail";
+import HydrantDetail from "@/components/detail/HydrantDetail";
 import BuildingDetail from "@/components/detail/BuildingDetail";
 import { useState } from "react";
 
@@ -67,6 +68,7 @@ const DETAIL_COMPONENTS: Record<NodeKind, React.ComponentType<{ node: any }>> = 
   cellar: CellarDetail,
   smokehouse: SmokehouseDetail,
   rainwater: RainwaterDetail,
+  hydrant: HydrantDetail,
   irrigation: IrrigationDetail,
   fence: FenceDetail,
   stream: StreamDetail,

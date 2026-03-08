@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useFarmSync } from "@/hooks/useFarmSync";
 import LoadDemoBanner from "@/components/LoadDemoBanner";
 import UserMenu from "@/components/UserMenu";
+import PersistentMap from "@/components/map/PersistentMap";
+import UndoManager from "@/components/UndoManager";
 
 const NAV_ITEMS = [
   { href: "/", label: "Map" },
@@ -17,6 +19,7 @@ const NAV_ITEMS = [
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useFarmSync();
+  const isMapPage = pathname === "/";
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg">
@@ -44,7 +47,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <UserMenu />
       </header>
       <LoadDemoBanner />
-      <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
+      <main className="flex-1 min-h-0 overflow-hidden relative">
+        <PersistentMap visible={isMapPage} />
+        {!isMapPage && children}
+      </main>
+      <UndoManager />
     </div>
   );
 }

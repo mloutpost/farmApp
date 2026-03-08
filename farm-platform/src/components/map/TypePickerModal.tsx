@@ -48,6 +48,7 @@ export default function TypePickerModal() {
   const profile = useFarmStore((s) => s.profile);
   const allNodes = useFarmStore((s) => s.nodes);
   const gardens = useMemo(() => allNodes.filter((n) => n.kind === "garden"), [allNodes]);
+  const waterlines = useMemo(() => allNodes.filter((n) => n.kind === "pipeline" || n.kind === "irrigation"), [allNodes]);
   const [kind, setKind] = useState<NodeKind | "">(pendingParentId ? "bed" : "");
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string>(pendingParentId ?? "");
@@ -91,7 +92,7 @@ export default function TypePickerModal() {
   const handleCreate = () => {
     if (!kind || !completedGeometry) return;
     const displayName = name.trim() || `${NODE_KIND_LABELS[kind]} ${Date.now().toString().slice(-4)}`;
-    const resolvedParentId = kind === "bed" && parentId ? parentId : undefined;
+    const resolvedParentId = (kind === "bed" || kind === "hydrant") && parentId ? parentId : undefined;
     const id = addNode(kind, displayName, completedGeometry, undefined, resolvedParentId);
 
     if (kind === "garden" && stats.areaSqFt) {
@@ -262,6 +263,25 @@ export default function TypePickerModal() {
               ))}
             </select>
             <p className="text-xs text-text-muted mt-1">Link this bed to a garden to see it on that garden's detail page.</p>
+          </div>
+        )}
+
+        {kind === "hydrant" && waterlines.length > 0 && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">
+              Parent Water Line
+            </label>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent/50 focus:outline-none transition-colors"
+            >
+              <option value="">None (standalone hydrant)</option>
+              {waterlines.map((w) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-text-muted mt-1">Link this hydrant to a water line so it appears as a sub-node.</p>
           </div>
         )}
 

@@ -37,6 +37,8 @@ interface MapState {
   hiddenMarkerIds: Set<string>;
   /** Pre-set parent node ID for next created node (e.g. garden -> bed) */
   pendingParentId: string | null;
+  /** True after the map has rendered at least once (so saved center/zoom are valid) */
+  mapViewInitialized: boolean;
 
   setMapType: (mapType: GoogleMapType) => void;
   setSelectedMapNode: (id: string | null) => void;
@@ -57,6 +59,7 @@ interface MapState {
   setCompletedGeometry: (g: GeoJSON | null) => void;
   setEditingNodeId: (id: string | null) => void;
   setPendingParentId: (id: string | null) => void;
+  setMapViewInitialized: () => void;
   addPendingPoint: (lng: number, lat: number) => void;
   finishPendingGeometry: () => GeoJSON | null;
   undoLastPoint: () => void;
@@ -110,6 +113,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   mapMarkers: [],
   hiddenMarkerIds: new Set<string>(),
   pendingParentId: null,
+  mapViewInitialized: false,
 
   setMapType: (mapType) => set({ mapType }),
   setSelectedMapNode: (selectedMapNodeId) => set({ selectedMapNodeId }),
@@ -162,6 +166,7 @@ export const useMapStore = create<MapState>((set, get) => ({
       pendingGeometry: editingNodeId ? null : get().pendingGeometry,
     }),
   setPendingParentId: (pendingParentId) => set({ pendingParentId }),
+  setMapViewInitialized: () => set({ mapViewInitialized: true }),
 
   addPendingPoint: (lng, lat) => {
     const { drawMode, pendingGeometry } = get();

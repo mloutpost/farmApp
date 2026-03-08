@@ -28,6 +28,29 @@ import { NODE_KIND_COLORS, NODE_KIND_LABELS } from "@/types";
 import type { GeoJSON } from "geojson";
 import { mergeLineSegments } from "@/lib/merge-lines";
 
+const MAX_UNDO = 50;
+
+interface UndoSnapshot {
+  nodes: FarmNode[];
+  groups: FarmGroup[];
+  tasks: FarmTask[];
+  finances: FinancialEntry[];
+  label: string;
+}
+
+const _undoStack: UndoSnapshot[] = [];
+
+function pushUndo(state: FarmStore, label: string) {
+  _undoStack.push({
+    nodes: JSON.parse(JSON.stringify(state.nodes)),
+    groups: JSON.parse(JSON.stringify(state.groups)),
+    tasks: JSON.parse(JSON.stringify(state.tasks)),
+    finances: JSON.parse(JSON.stringify(state.finances)),
+    label,
+  });
+  if (_undoStack.length > MAX_UNDO) _undoStack.shift();
+}
+
 function uid(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -113,6 +136,8 @@ function emptyData(kind: NodeKind): NodeData {
       return { kind: "smokehouse", smokingLog: [], brineRecipes: [] };
     case "rainwater":
       return { kind: "rainwater", maintenanceLog: [] };
+    case "hydrant":
+      return { kind: "hydrant", maintenanceLog: [] };
   }
 }
 
@@ -162,6 +187,9 @@ interface FarmStore {
   setFlowPosition: (nodeId: string, pos: { x: number; y: number }) => void;
   setFlowPositions: (positions: Record<string, { x: number; y: number }>) => void;
 
+  undo: () => string | null;
+  canUndo: () => boolean;
+
   getFlowState: () => { nodes: Node[]; edges: Edge[] };
 }
 
@@ -175,6 +203,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   flowPositions: {},
 
   addNode: (kind, name, geometry, groupId, parentId) => {
+    pushUndo(get(), `Add ${name}`);
     const id = uid();
     const ts = now();
     const node: FarmNode = {
@@ -209,6 +238,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   removeGroup: (id) => {
+    pushUndo(get(), "Remove group");
     set((s) => ({
       groups: s.groups.filter((g) => g.id !== id),
       nodes: s.nodes.map((n) =>
@@ -218,6 +248,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   updateNode: (id, updates) => {
+    pushUndo(get(), "Update node");
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === id ? { ...n, ...updates, updatedAt: now() } : n
@@ -226,6 +257,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   changeNodeKind: (id, newKind) => {
+    pushUndo(get(), "Change node type");
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === id
@@ -236,6 +268,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   updateNodeData: (id, dataUpdates) => {
+    pushUndo(get(), "Update node data");
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === id
@@ -246,6 +279,8 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   removeNode: (id) => {
+    const node = get().nodes.find((n) => n.id === id);
+    pushUndo(get(), `Remove ${node?.name ?? "node"}`);
     set((s) => ({
       nodes: s.nodes
         .filter((n) => n.id !== id)
@@ -260,6 +295,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   setSelected: (id) => set({ selectedId: id }),
 
   addConnection: (source, target) => {
+    pushUndo(get(), "Add connection");
     set((s) => ({
       nodes: s.nodes.map((n) => {
         if (n.id === source && !n.connections.includes(target))
@@ -270,6 +306,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   removeConnection: (a, b) => {
+    pushUndo(get(), "Remove connection");
     set((s) => ({
       nodes: s.nodes.map((n) => {
         if (n.id === a)
@@ -282,6 +319,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   logActivity: (nodeId, entry) => {
+    pushUndo(get(), "Log activity");
     const e: ActivityEntry = { ...entry, id: uid() };
     set((s) => ({
       nodes: s.nodes.map((n) =>
@@ -293,6 +331,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   logHarvest: (nodeId, entry) => {
+    pushUndo(get(), "Log harvest");
     const e: HarvestEntry = { ...entry, id: uid() };
     set((s) => ({
       nodes: s.nodes.map((n) =>
@@ -304,6 +343,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   addPhoto: (nodeId, entry) => {
+    pushUndo(get(), "Add photo");
     const e: PhotoEntry = { ...entry, id: uid() };
     set((s) => ({
       nodes: s.nodes.map((n) =>
@@ -315,6 +355,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   removePhoto: (nodeId, photoId) => {
+    pushUndo(get(), "Remove photo");
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === nodeId
@@ -325,6 +366,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   bulkLogActivity: (nodeIds, entry) => {
+    pushUndo(get(), "Bulk log activity");
     set((s) => ({
       nodes: s.nodes.map((n) =>
         nodeIds.includes(n.id)
@@ -335,6 +377,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   copyLastSeason: (fromYear, toYear) => {
+    pushUndo(get(), "Copy season");
     set((s) => {
       const updated = s.nodes.map((n) => {
         if (n.data.kind !== "garden") return n;
@@ -362,6 +405,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   mergeLineNodes: (kind) => {
+    pushUndo(get(), "Merge line nodes");
     const { nodes } = get();
     const targets = nodes.filter(
       (n) => n.kind === kind && n.geometry && (n.geometry as { type: string }).type === "LineString"
@@ -417,6 +461,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   addTask: (task) => {
+    pushUndo(get(), "Add task");
     const id = uid();
     const ts = now();
     set((s) => ({ tasks: [...s.tasks, { ...task, id, createdAt: ts, updatedAt: ts }] }));
@@ -424,18 +469,21 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   updateTask: (id, updates) => {
+    pushUndo(get(), "Update task");
     set((s) => ({
       tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates, updatedAt: now() } : t)),
     }));
   },
 
   removeTask: (id) => {
+    pushUndo(get(), "Remove task");
     set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
   },
 
   completeTask: (id) => {
     const task = get().tasks.find((t) => t.id === id);
     if (!task) return;
+    pushUndo(get(), "Complete task");
     const ts = now();
     const today = ts.slice(0, 10);
 
@@ -459,18 +507,21 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   },
 
   addFinancialEntry: (entry) => {
+    pushUndo(get(), "Add financial entry");
     const id = uid();
     set((s) => ({ finances: [...s.finances, { ...entry, id, createdAt: now() }] }));
     return id;
   },
 
   updateFinancialEntry: (id, updates) => {
+    pushUndo(get(), "Update financial entry");
     set((s) => ({
       finances: s.finances.map((f) => (f.id === id ? { ...f, ...updates } : f)),
     }));
   },
 
   removeFinancialEntry: (id) => {
+    pushUndo(get(), "Remove financial entry");
     set((s) => ({ finances: s.finances.filter((f) => f.id !== id) }));
   },
 
@@ -481,6 +532,20 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   setFlowPositions: (positions) => {
     set({ flowPositions: positions });
   },
+
+  undo: () => {
+    const snapshot = _undoStack.pop();
+    if (!snapshot) return null;
+    set({
+      nodes: snapshot.nodes,
+      groups: snapshot.groups,
+      tasks: snapshot.tasks,
+      finances: snapshot.finances,
+    });
+    return snapshot.label;
+  },
+
+  canUndo: () => _undoStack.length > 0,
 
   getFlowState: () => {
     const { nodes, flowPositions } = get();

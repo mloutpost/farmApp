@@ -3,12 +3,12 @@ import type { GeoJSON } from "geojson";
 /* ── Node kinds by geometry ── */
 
 export type AreaKind = "garden" | "bed" | "field" | "pasture" | "orchard" | "pond" | "greenhouse" | "vineyard" | "woodlot" | "corral" | "building";
-export type PointKind = "well" | "pump" | "barn" | "compost" | "spring" | "shop" | "silo" | "beehive" | "gate" | "coop" | "cellar" | "smokehouse" | "rainwater";
+export type PointKind = "well" | "pump" | "barn" | "compost" | "spring" | "shop" | "silo" | "beehive" | "gate" | "coop" | "cellar" | "smokehouse" | "rainwater" | "hydrant";
 export type LineKind = "irrigation" | "fence" | "stream" | "road" | "pipeline" | "ditch" | "powerline";
 export type NodeKind = AreaKind | PointKind | LineKind;
 
 export const AREA_KINDS: AreaKind[] = ["garden", "bed", "field", "pasture", "orchard", "pond", "greenhouse", "vineyard", "woodlot", "corral", "building"];
-export const POINT_KINDS: PointKind[] = ["well", "pump", "barn", "compost", "spring", "shop", "silo", "beehive", "gate", "coop", "cellar", "smokehouse", "rainwater"];
+export const POINT_KINDS: PointKind[] = ["well", "pump", "barn", "compost", "spring", "shop", "silo", "beehive", "gate", "coop", "cellar", "smokehouse", "rainwater", "hydrant"];
 export const LINE_KINDS: LineKind[] = ["irrigation", "fence", "stream", "road", "pipeline", "ditch", "powerline"];
 
 export const NODE_KIND_LABELS: Record<NodeKind, string> = {
@@ -36,6 +36,7 @@ export const NODE_KIND_LABELS: Record<NodeKind, string> = {
   cellar: "Root Cellar / Cold Storage",
   smokehouse: "Smokehouse / Processing",
   rainwater: "Rainwater Collection",
+  hydrant: "Farm Hydrant",
   irrigation: "Irrigation Line",
   fence: "Fence",
   stream: "Stream / Waterway",
@@ -70,6 +71,7 @@ export const NODE_KIND_COLORS: Record<NodeKind, string> = {
   cellar: "#78716c",
   smokehouse: "#dc2626",
   rainwater: "#0284c7",
+  hydrant: "#ef4444",
   irrigation: "#22d3ee",
   fence: "#78716c",
   stream: "#0ea5e9",
@@ -535,6 +537,16 @@ export interface SmokehouseData {
   brineRecipes: Array<{ name: string; ingredients: string; notes?: string }>;
 }
 
+export interface HydrantData {
+  kind: "hydrant";
+  hydrantType?: "standpipe" | "frost-free" | "post" | "yard" | "quick-connect";
+  threadSize?: string;
+  flowRateGPM?: number;
+  pressurePSI?: number;
+  frostProof?: boolean;
+  maintenanceLog: Array<{ date: string; task: string; notes?: string }>;
+}
+
 export interface RainwaterData {
   kind: "rainwater";
   collectionType?: "barrel" | "cistern" | "tank" | "underground" | "IBC-tote";
@@ -572,6 +584,7 @@ export type NodeData =
   | CellarData
   | SmokehouseData
   | RainwaterData
+  | HydrantData
   | IrrigationData
   | FenceData
   | StreamData

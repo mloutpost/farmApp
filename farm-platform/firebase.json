@@ -4,6 +4,12 @@
   },
   "hosting": {
     "public": "out",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/flow", "destination": "/flow.html" },
+      { "source": "/settings", "destination": "/settings.html" },
+      { "source": "/node", "destination": "/node.html" },
+      { "source": "/timeline", "destination": "/timeline.html" }
+    ]
   }
 }

@@ -8,13 +8,10 @@ import UserMenu from "@/components/UserMenu";
 
 const NAV_ITEMS = [
   { href: "/", label: "Map" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/tasks", label: "Tasks" },
+  { href: "/flow", label: "Nodes" },
+  { href: "/calendar", label: "Planner" },
   { href: "/finances", label: "Finances" },
-  { href: "/reports", label: "Reports" },
   { href: "/timeline", label: "Timeline" },
-  { href: "/flow", label: "Flow" },
-  { href: "/settings", label: "Settings" },
 ];
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {

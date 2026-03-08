@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { MarkerType } from "@xyflow/react";
 import type { Node, Edge } from "@xyflow/react";
 import type {
   FarmNode,
@@ -258,13 +259,11 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
 
   setSelected: (id) => set({ selectedId: id }),
 
-  addConnection: (a, b) => {
+  addConnection: (source, target) => {
     set((s) => ({
       nodes: s.nodes.map((n) => {
-        if (n.id === a && !n.connections.includes(b))
-          return { ...n, connections: [...n.connections, b], updatedAt: now() };
-        if (n.id === b && !n.connections.includes(a))
-          return { ...n, connections: [...n.connections, a], updatedAt: now() };
+        if (n.id === source && !n.connections.includes(target))
+          return { ...n, connections: [...n.connections, target], updatedAt: now() };
         return n;
       }),
     }));
@@ -489,30 +488,204 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
     const flowEdges: Edge[] = [];
     const edgeSet = new Set<string>();
 
-    nodes.forEach((n, i) => {
-      const saved = flowPositions[n.id];
-      flowNodes.push({
-        id: n.id,
-        type: "farmNode",
-        position: saved ?? { x: 100 + (i % 4) * 240, y: 80 + Math.floor(i / 4) * 160 },
-        data: { label: n.name, kind: n.kind, color: NODE_KIND_COLORS[n.kind] ?? "#94a3b8" },
-      });
+    const childrenOf = new Map<string, FarmNode[]>();
+    for (const n of nodes) {
+      if (n.parentId) {
+        const list = childrenOf.get(n.parentId) ?? [];
+        list.push(n);
+        childrenOf.set(n.parentId, list);
+      }
+    }
 
-      n.connections.forEach((targetId) => {
-        const key = [n.id, targetId].sort().join("--");
-        if (!edgeSet.has(key)) {
-          edgeSet.add(key);
+    const CHILD_W = 180;
+    const CHILD_H = 56;
+    const PAD_X = 16;
+    const PAD_TOP = 44;
+    const PAD_BOTTOM = 12;
+    const GAP = 10;
+
+    let topIdx = 0;
+
+    const placedInParent = new Set<string>();
+    for (const n of nodes) {
+      if (n.parentId) placedInParent.add(n.id);
+    }
+
+    for (const n of nodes) {
+      const children = childrenOf.get(n.id);
+      const isParent = children && children.length > 0;
+      const isChild = !!n.parentId;
+
+      if (isChild) continue;
+
+      if (isParent) {
+        const cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(children.length))));
+        const rows = Math.ceil(children.length / cols);
+        const groupW = PAD_X * 2 + cols * CHILD_W + (cols - 1) * GAP;
+        const groupH = PAD_TOP + rows * CHILD_H + (rows - 1) * GAP + PAD_BOTTOM;
+
+        const saved = flowPositions[n.id];
+        flowNodes.push({
+          id: n.id,
+          type: "farmGroup",
+          position: saved ?? { x: 100 + (topIdx % 4) * 280, y: 80 + Math.floor(topIdx / 4) * 220 },
+          data: { label: n.name, kind: n.kind, color: NODE_KIND_COLORS[n.kind] ?? "#94a3b8", childCount: children.length },
+          style: { width: groupW, height: groupH },
+        });
+        topIdx++;
+
+        children.forEach((child, ci) => {
+          const col = ci % cols;
+          const row = Math.floor(ci / cols);
+          const childSaved = flowPositions[child.id];
+          flowNodes.push({
+            id: child.id,
+            type: "farmNode",
+            parentId: n.id,
+            extent: "parent" as const,
+            position: childSaved ?? { x: PAD_X + col * (CHILD_W + GAP), y: PAD_TOP + row * (CHILD_H + GAP) },
+            data: { label: child.name, kind: child.kind, color: NODE_KIND_COLORS[child.kind] ?? "#94a3b8" },
+            style: { width: CHILD_W },
+          });
+        });
+        placedInParent.add(n.id);
+      }
+    }
+
+    const kindBuckets = new Map<string, FarmNode[]>();
+    for (const n of nodes) {
+      if (placedInParent.has(n.id)) continue;
+      const list = kindBuckets.get(n.kind) ?? [];
+      list.push(n);
+      kindBuckets.set(n.kind, list);
+    }
+
+    for (const [kind, members] of kindBuckets) {
+      const color = NODE_KIND_COLORS[kind as keyof typeof NODE_KIND_COLORS] ?? "#94a3b8";
+      const kindLabel = NODE_KIND_LABELS[kind as keyof typeof NODE_KIND_LABELS] ?? kind;
+
+      if (members.length >= 2) {
+        const groupId = `__kind_group__${kind}`;
+        const cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(members.length))));
+        const rows = Math.ceil(members.length / cols);
+        const groupW = PAD_X * 2 + cols * CHILD_W + (cols - 1) * GAP;
+        const groupH = PAD_TOP + rows * CHILD_H + (rows - 1) * GAP + PAD_BOTTOM;
+
+        const saved = flowPositions[groupId];
+        flowNodes.push({
+          id: groupId,
+          type: "farmGroup",
+          position: saved ?? { x: 100 + (topIdx % 4) * 280, y: 80 + Math.floor(topIdx / 4) * 260 },
+          data: { label: `${kindLabel}s`, kind, color, childCount: members.length },
+          style: { width: groupW, height: groupH },
+        });
+        topIdx++;
+
+        members.forEach((m, ci) => {
+          const col = ci % cols;
+          const row = Math.floor(ci / cols);
+          const childSaved = flowPositions[m.id];
+          flowNodes.push({
+            id: m.id,
+            type: "farmNode",
+            parentId: groupId,
+            extent: "parent" as const,
+            position: childSaved ?? { x: PAD_X + col * (CHILD_W + GAP), y: PAD_TOP + row * (CHILD_H + GAP) },
+            data: { label: m.name, kind: m.kind, color },
+            style: { width: CHILD_W },
+          });
+        });
+      } else {
+        for (const n of members) {
+          const saved = flowPositions[n.id];
+          flowNodes.push({
+            id: n.id,
+            type: "farmNode",
+            position: saved ?? { x: 100 + (topIdx % 4) * 240, y: 80 + Math.floor(topIdx / 4) * 160 },
+            data: { label: n.name, kind: n.kind, color },
+          });
+          topIdx++;
+        }
+      }
+    }
+
+    const nodeNameMap = new Map<string, string>();
+    for (const n of nodes) nodeNameMap.set(n.id, n.name);
+
+    const nodeToGroup = new Map<string, string>();
+    for (const fn of flowNodes) {
+      if (fn.parentId) nodeToGroup.set(fn.id, fn.parentId);
+    }
+
+    interface AggEdge {
+      source: string;
+      target: string;
+      connections: { sourceId: string; sourceName: string; targetId: string; targetName: string }[];
+    }
+    const groupEdges = new Map<string, AggEdge>();
+    const seenPairs = new Set<string>();
+
+    for (const n of nodes) {
+      for (const targetId of n.connections) {
+        const pairKey = [n.id, targetId].sort().join("--");
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
+
+        const srcGroup = nodeToGroup.get(n.id);
+        const tgtGroup = nodeToGroup.get(targetId);
+        const src = srcGroup ?? n.id;
+        const tgt = tgtGroup ?? targetId;
+
+        if (src === tgt) {
           flowEdges.push({
-            id: `e-${key}`,
+            id: `e-internal-${n.id}-${targetId}`,
             source: n.id,
             target: targetId,
-            type: "default",
+            type: "internalEdge",
             animated: false,
-            style: { stroke: "var(--border-color)", strokeWidth: 2 },
+            data: {
+              connections: [{
+                sourceId: n.id,
+                sourceName: nodeNameMap.get(n.id) ?? n.id,
+                targetId,
+                targetName: nodeNameMap.get(targetId) ?? targetId,
+              }],
+              count: 1,
+            },
           });
+          continue;
         }
+
+        const key = [src, tgt].sort().join("--");
+        const existing = groupEdges.get(key);
+        const conn = {
+          sourceId: n.id,
+          sourceName: nodeNameMap.get(n.id) ?? n.id,
+          targetId,
+          targetName: nodeNameMap.get(targetId) ?? targetId,
+        };
+        if (existing) {
+          existing.connections.push(conn);
+        } else {
+          groupEdges.set(key, { source: src, target: tgt, connections: [conn] });
+        }
+      }
+    }
+
+    for (const [key, { source, target, connections }] of groupEdges) {
+      const count = connections.length;
+      flowEdges.push({
+        id: `e-${key}`,
+        source,
+        target,
+        type: "farmEdge",
+        animated: false,
+        data: { connections, count },
+        style: {
+          strokeWidth: count > 1 ? Math.min(2 + count * 0.5, 5) : 1.5,
+        },
       });
-    });
+    }
 
     return { nodes: flowNodes, edges: flowEdges };
   },

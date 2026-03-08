@@ -4,6 +4,12 @@ import { useState, useMemo, useCallback } from "react";
 import { useFarmStore } from "@/store/farm-store";
 import type { FinancialEntry } from "@/types";
 import { NODE_KIND_LABELS } from "@/types";
+import ReportsView from "./ReportsView";
+
+const TABS = [
+  { id: "transactions" as const, label: "Transactions" },
+  { id: "reports" as const, label: "Reports" },
+];
 
 const EXPENSE_CATEGORIES = [
   "seed", "soil", "amendment", "fertilizer", "pesticide", "equipment",
@@ -48,7 +54,7 @@ function emptyForm(season: number): FormState {
   };
 }
 
-export default function FinancesPage() {
+function TransactionsView() {
   const nodes = useFarmStore((s) => s.nodes);
   const finances = useFarmStore((s) => s.finances);
   const profile = useFarmStore((s) => s.profile);
@@ -213,29 +219,10 @@ export default function FinancesPage() {
       : [...EXPENSE_CATEGORIES, ...REVENUE_CATEGORIES.filter((c) => !EXPENSE_CATEGORIES.includes(c as typeof EXPENSE_CATEGORIES[number]))];
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Finances</h1>
-            <p className="mt-1 text-sm text-text-secondary">Track income and expenses across your farm</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={handleExportCsv} className="rounded-md border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors">
-              Export CSV
-            </button>
-            <button
-              onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyForm(selectedYear)); }}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-black hover:bg-accent-hover transition-colors"
-            >
-              + Add Entry
-            </button>
-          </div>
-        </div>
-
-        {/* Season selector */}
-        <div className="flex items-center gap-3 mb-6">
+    <div className="max-w-5xl mx-auto px-6 py-6">
+      {/* Controls row */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
           <button onClick={() => setSelectedYear((y) => y - 1)} className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
@@ -245,8 +232,20 @@ export default function FinancesPage() {
           </button>
           <span className="text-xs text-text-muted">Season / Year</span>
         </div>
+        <div className="flex items-center gap-3">
+          <button onClick={handleExportCsv} className="rounded-md border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors">
+            Export CSV
+          </button>
+          <button
+            onClick={() => { setShowForm(true); setEditingId(null); setForm(emptyForm(selectedYear)); }}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-black hover:bg-accent-hover transition-colors"
+          >
+            + Add Entry
+          </button>
+        </div>
+      </div>
 
-        {/* Summary cards */}
+      {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="rounded-xl border border-border bg-bg-elevated p-5">
             <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">Revenue</p>
@@ -646,6 +645,42 @@ export default function FinancesPage() {
             </div>
           )}
         </div>
+      </div>
+  );
+}
+
+export default function FinancesPage() {
+  const [tab, setTab] = useState<"transactions" | "reports">("transactions");
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-border bg-bg-elevated/60 backdrop-blur-sm">
+        <div className="max-w-5xl mx-auto px-6 pt-5 pb-0 flex items-end justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-text-primary tracking-tight mb-3">Finances</h1>
+            <div className="flex items-center gap-1">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors relative ${
+                    tab === t.id
+                      ? "text-accent bg-bg"
+                      : "text-text-secondary hover:text-text-primary hover:bg-bg-surface/50"
+                  }`}
+                >
+                  {t.label}
+                  {tab === t.id && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent rounded-full" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === "transactions" ? <TransactionsView /> : <ReportsView />}
       </div>
     </div>
   );

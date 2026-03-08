@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { dxfToGeoJson, type DxfToGeoJsonResult, type ImportLogEntry } from "@/lib/dxf-to-geojson";
 import { transformGeoJsonToWgs84, CRS_OPTIONS, type CrsOption } from "@/lib/coordinate-transform";
 import { useMapStore } from "@/store/map-store";
+import { IconFolder } from "@/components/icons/FarmIcons";
 import type { MapLayer } from "@/types";
 import type { FeatureCollection } from "geojson";
 
@@ -176,18 +177,14 @@ export default function SurveyImport() {
   }, [result, layerName, sourceCrs, layers, setLayers, setFitToLayerId, setLastImport, addLog, file]);
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <section className="rounded-lg border border-border bg-bg-elevated p-6">
-        <h2 className="text-lg font-semibold text-text-primary mb-2">
-          Survey import (GeoJSON / DXF)
-        </h2>
-        <p className="text-sm text-text-secondary mb-4">
-          <strong>GeoJSON</strong> (recommended): Export from QGIS as GeoJSON (WGS84).
-          <br />
-          <strong>DXF</strong>: ASCII DXF only. Select your survey&apos;s coordinate system below – DXF typically uses UTM or State Plane, not lat/lng.
-        </p>
+    <div className="space-y-6">
+      <p className="text-sm text-text-secondary">
+        <strong>GeoJSON</strong> (recommended): Export from QGIS as GeoJSON (WGS84).
+        <br />
+        <strong>DXF</strong>: ASCII DXF only. Select your survey&apos;s coordinate system below – DXF typically uses UTM or State Plane, not lat/lng.
+      </p>
 
-        <div
+      <div
           onDrop={onDrop}
           onDragOver={onDragOver}
           className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-accent/50 transition-colors"
@@ -204,21 +201,21 @@ export default function SurveyImport() {
               <span className="text-text-secondary">Parsing...</span>
             ) : (
               <>
-                <span className="text-4xl block mb-2">📁</span>
+                <span className="block mb-2 text-accent"><IconFolder size={48} /></span>
                 <span className="text-accent font-medium">Drop GeoJSON or DXF here</span>
                 <span className="text-text-secondary"> or click to browse</span>
               </>
             )}
           </label>
-        </div>
+      </div>
 
-        {error && (
+      {error && (
           <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
             {error}
           </div>
-        )}
+      )}
 
-        {(loading || importLog.length > 0) && (
+      {(loading || importLog.length > 0) && (
           <div className="mt-4 space-y-3">
             {loading && (
               <div className="h-2 rounded-full bg-bg-surface overflow-hidden">
@@ -245,9 +242,9 @@ export default function SurveyImport() {
               </div>
             </details>
           </div>
-        )}
+      )}
 
-        {result && (
+      {result && (
           <div className="mt-4 rounded-lg border border-border bg-bg-surface p-4 space-y-3">
             <h3 className="text-sm font-semibold text-text-primary">Layers found</h3>
             {result.allLayers.length > 0 ? (
@@ -272,14 +269,14 @@ export default function SurveyImport() {
               <div className="text-xs text-text-secondary">
                 <span className="font-medium">Entity summary: </span>
                 {Object.entries(result.entityTypeCounts)
-                  .map(([t, c]) => `${t}: ${c.converted}✓ ${c.skipped}✗`)
+                  .map(([t, c]) => `${t}: ${c.converted} converted, ${c.skipped} skipped`)
                   .join(" · ")}
               </div>
             )}
           </div>
-        )}
+      )}
 
-        {result && result.features.length > 0 && (
+      {result && result.features.length > 0 && (
           <div className="mt-6 space-y-4">
             <div className="flex flex-wrap items-center gap-4">
               <div>
@@ -315,14 +312,13 @@ export default function SurveyImport() {
               {result.layers.length > 0 && ` across ${result.layers.length} layer(s)`}
             </div>
           </div>
-        )}
-      </section>
+      )}
 
       {layers.some((l) => l.id.startsWith("survey-")) && (
-        <section className="rounded-lg border border-border bg-bg-elevated p-6">
-          <h2 className="text-lg font-semibold text-text-primary mb-2">
+        <div className="pt-6 border-t border-border">
+          <h3 className="text-sm font-semibold text-text-primary mb-2">
             Imported survey layers
-          </h2>
+          </h3>
           <ul className="space-y-2">
             {layers
               .filter((l) => l.id.startsWith("survey-"))
@@ -335,7 +331,7 @@ export default function SurveyImport() {
                 </li>
               ))}
           </ul>
-        </section>
+        </div>
       )}
     </div>
   );

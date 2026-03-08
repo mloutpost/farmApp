@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:app-settings": "tsx scripts/seed-app-settings.ts"
+    "seed:app-settings": "tsx scripts/seed-app-settings.ts",
+    "audit:clickables": "rg '<button' src -g '*.tsx' -A 2 2>/dev/null | rg -v 'onClick|type=' || echo 'Audit complete'"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",

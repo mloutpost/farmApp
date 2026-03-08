@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../styles/design-tokens.css";
 
 @theme inline {
   --color-bg: var(--bg);
@@ -11,21 +12,35 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --animate-duration-fast: 100ms;
+  --animate-duration-normal: 200ms;
+  --animate-duration-slow: 300ms;
 }
 
 :root {
+  /* Backgrounds */
   --bg: #0b0f14;
   --bg-elevated: #131921;
   --bg-surface: #1a2332;
+  /* Text */
   --text-primary: #e8ecf1;
   --text-secondary: #8b98a8;
   --text-muted: #4a5568;
+  /* Borders */
   --border-color: #1e2d3d;
+  /* Accent (earth green - organic, utilitarian) */
   --accent: #22c55e;
   --accent-hover: #16a34a;
+  /* Semantic */
   --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #eab308;
+  --info: #0ea5e9;
 }
 
 * {
@@ -37,7 +52,24 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: var(--text-fluid-base);
+  line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Focus ring for accessibility (WCAG) */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Touch target utility - use on icon-only buttons for 44x44px minimum */
+.touch-target {
+  min-height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 ::-webkit-scrollbar {

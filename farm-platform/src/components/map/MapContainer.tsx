@@ -1,14 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
+import { useSyncFarmToMap } from "@/hooks/useSyncFarmToMap";
+import DrawToolbar from "./DrawToolbar";
 import MapStyleSwitcher from "./MapStyleSwitcher";
-import {
-  SurveyImportStatus,
-  NodePalette,
-  MapLayerControl,
-} from "./MapFloatingPanels";
-import MapNodeDetailsPanel from "./MapNodeDetailsPanel";
-import NodeActionMenu from "./NodeActionMenu";
+import TypePickerModal from "./TypePickerModal";
+import MyFarmButton from "./MyFarmButton";
+import FarmNodesPanel from "./FarmNodesPanel";
 
 const FarmMap = dynamic(() => import("./FarmMap"), {
   ssr: false,
@@ -23,39 +22,29 @@ const FarmMap = dynamic(() => import("./FarmMap"), {
 });
 
 export default function MapContainer() {
+  useSyncFarmToMap();
+  const [panelOpen, setPanelOpen] = useState(false);
+
   return (
-    <main className="relative flex-1 min-h-0 h-full flex">
-      {/* Left floating panels */}
-      <div className="absolute left-4 top-4 z-10 flex flex-col gap-3">
-        <SurveyImportStatus />
-        <NodePalette />
-      </div>
-      <div className="absolute left-4 bottom-24 z-10">
-        <MapLayerControl />
+    <div className="relative h-full w-full">
+      <div className="absolute left-4 top-4 z-10">
+        <DrawToolbar />
       </div>
 
-      {/* Center map */}
-      <div className="flex-1 min-w-0 relative">
+      <div className="absolute inset-0">
         <FarmMap />
-        <div className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2">
-          <MapStyleSwitcher />
-        </div>
       </div>
 
-      {/* Node action menu - shows when a node is selected */}
-      <div className="absolute left-1/2 top-20 z-20 -translate-x-1/2">
-        <NodeActionMenu />
+      <div className="absolute bottom-4 left-4 z-10">
+        <MyFarmButton onClick={() => setPanelOpen(true)} />
       </div>
 
-      {/* Right sidebar - node details */}
-      <MapNodeDetailsPanel />
-
-      {/* Bottom save button */}
-      <div className="absolute bottom-6 right-4 z-10">
-        <button className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-black hover:bg-accent-hover transition-colors">
-          Save Changes
-        </button>
+      <div className="absolute bottom-4 right-4 z-10">
+        <MapStyleSwitcher />
       </div>
-    </main>
+
+      <TypePickerModal />
+      <FarmNodesPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
+    </div>
   );
 }

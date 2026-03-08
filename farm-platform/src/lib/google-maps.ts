@@ -5,9 +5,9 @@ export const DEFAULT_ZOOM = 4;
 
 export type GoogleMapType = "satellite" | "hybrid" | "roadmap" | "terrain";
 
-export const MAP_TYPE_OPTIONS: { key: GoogleMapType; label: string; icon: string }[] = [
-  { key: "satellite", label: "Satellite", icon: "🛰" },
-  { key: "hybrid", label: "Hybrid", icon: "🗺" },
-  { key: "roadmap", label: "Road", icon: "🛣" },
-  { key: "terrain", label: "Terrain", icon: "⛰" },
+export const MAP_TYPE_OPTIONS: { key: GoogleMapType; label: string }[] = [
+  { key: "satellite", label: "Satellite" },
+  { key: "hybrid", label: "Hybrid" },
+  { key: "roadmap", label: "Road" },
+  { key: "terrain", label: "Terrain" },
 ];

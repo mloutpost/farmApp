@@ -4,6 +4,8 @@ import type {
   FarmNode,
   FarmGroup,
   FarmProfile,
+  FarmTask,
+  FinancialEntry,
   NodeKind,
   NodeData,
   ActivityEntry,
@@ -20,11 +22,10 @@ import type {
   IrrigationData,
   FenceData,
   StreamData,
-  NODE_KIND_COLORS,
 } from "@/types";
+import { NODE_KIND_COLORS, NODE_KIND_LABELS } from "@/types";
 import type { GeoJSON } from "geojson";
 import { mergeLineSegments } from "@/lib/merge-lines";
-import { NODE_KIND_LABELS } from "@/types";
 
 function uid(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -32,6 +33,19 @@ function uid(): string {
 
 function now(): string {
   return new Date().toISOString();
+}
+
+function computeNextDueDate(current: string, recurrence: string): string {
+  const d = new Date(current + "T12:00:00");
+  switch (recurrence) {
+    case "daily": d.setDate(d.getDate() + 1); break;
+    case "weekly": d.setDate(d.getDate() + 7); break;
+    case "biweekly": d.setDate(d.getDate() + 14); break;
+    case "monthly": d.setMonth(d.getMonth() + 1); break;
+    case "quarterly": d.setMonth(d.getMonth() + 3); break;
+    case "yearly": d.setFullYear(d.getFullYear() + 1); break;
+  }
+  return d.toISOString().slice(0, 10);
 }
 
 function emptyData(kind: NodeKind): NodeData {
@@ -106,6 +120,9 @@ interface FarmStore {
   groups: FarmGroup[];
   profile: FarmProfile;
   selectedId: string | null;
+  tasks: FarmTask[];
+  finances: FinancialEntry[];
+  flowPositions: Record<string, { x: number; y: number }>;
 
   addNode: (kind: NodeKind, name: string, geometry: GeoJSON, groupId?: string, parentId?: string) => string;
   addGroup: (name: string, color?: string) => string;
@@ -132,6 +149,18 @@ interface FarmStore {
 
   updateProfile: (updates: Partial<FarmProfile>) => void;
 
+  addTask: (task: Omit<FarmTask, "id" | "createdAt" | "updatedAt">) => string;
+  updateTask: (id: string, updates: Partial<FarmTask>) => void;
+  removeTask: (id: string) => void;
+  completeTask: (id: string) => void;
+
+  addFinancialEntry: (entry: Omit<FinancialEntry, "id" | "createdAt">) => string;
+  updateFinancialEntry: (id: string, updates: Partial<FinancialEntry>) => void;
+  removeFinancialEntry: (id: string) => void;
+
+  setFlowPosition: (nodeId: string, pos: { x: number; y: number }) => void;
+  setFlowPositions: (positions: Record<string, { x: number; y: number }>) => void;
+
   getFlowState: () => { nodes: Node[]; edges: Edge[] };
 }
 
@@ -140,6 +169,9 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   groups: [],
   profile: { name: "My Farm", currentSeason: new Date().getFullYear() },
   selectedId: null,
+  tasks: [],
+  finances: [],
+  flowPositions: {},
 
   addNode: (kind, name, geometry, groupId, parentId) => {
     const id = uid();
@@ -385,25 +417,85 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
     set((s) => ({ profile: { ...s.profile, ...updates } }));
   },
 
+  addTask: (task) => {
+    const id = uid();
+    const ts = now();
+    set((s) => ({ tasks: [...s.tasks, { ...task, id, createdAt: ts, updatedAt: ts }] }));
+    return id;
+  },
+
+  updateTask: (id, updates) => {
+    set((s) => ({
+      tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...updates, updatedAt: now() } : t)),
+    }));
+  },
+
+  removeTask: (id) => {
+    set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) }));
+  },
+
+  completeTask: (id) => {
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task) return;
+    const ts = now();
+    const today = ts.slice(0, 10);
+
+    if (task.recurrence !== "none") {
+      const nextDue = computeNextDueDate(task.dueDate ?? today, task.recurrence);
+      if (!task.recurrenceEndDate || nextDue <= task.recurrenceEndDate) {
+        const newId = uid();
+        set((s) => ({
+          tasks: [
+            ...s.tasks.map((t) => (t.id === id ? { ...t, status: "done" as const, completedDate: today, updatedAt: ts } : t)),
+            { ...task, id: newId, dueDate: nextDue, status: "todo" as const, completedDate: undefined, createdAt: ts, updatedAt: ts },
+          ],
+        }));
+        return;
+      }
+    }
+
+    set((s) => ({
+      tasks: s.tasks.map((t) => (t.id === id ? { ...t, status: "done" as const, completedDate: today, updatedAt: ts } : t)),
+    }));
+  },
+
+  addFinancialEntry: (entry) => {
+    const id = uid();
+    set((s) => ({ finances: [...s.finances, { ...entry, id, createdAt: now() }] }));
+    return id;
+  },
+
+  updateFinancialEntry: (id, updates) => {
+    set((s) => ({
+      finances: s.finances.map((f) => (f.id === id ? { ...f, ...updates } : f)),
+    }));
+  },
+
+  removeFinancialEntry: (id) => {
+    set((s) => ({ finances: s.finances.filter((f) => f.id !== id) }));
+  },
+
+  setFlowPosition: (nodeId, pos) => {
+    set((s) => ({ flowPositions: { ...s.flowPositions, [nodeId]: pos } }));
+  },
+
+  setFlowPositions: (positions) => {
+    set({ flowPositions: positions });
+  },
+
   getFlowState: () => {
-    const { nodes } = get();
+    const { nodes, flowPositions } = get();
     const flowNodes: Node[] = [];
     const flowEdges: Edge[] = [];
     const edgeSet = new Set<string>();
 
-    const kindToColor: Record<string, string> = {
-      garden: "#22c55e", field: "#84cc16", pasture: "#a3e635", orchard: "#4ade80",
-      well: "#38bdf8", pump: "#60a5fa",
-      barn: "#94a3b8", compost: "#a78bfa",
-      irrigation: "#22d3ee", fence: "#78716c", stream: "#0ea5e9",
-    };
-
     nodes.forEach((n, i) => {
+      const saved = flowPositions[n.id];
       flowNodes.push({
         id: n.id,
         type: "farmNode",
-        position: { x: 100 + (i % 4) * 240, y: 80 + Math.floor(i / 4) * 160 },
-        data: { label: n.name, kind: n.kind, color: kindToColor[n.kind] ?? "#94a3b8" },
+        position: saved ?? { x: 100 + (i % 4) * 240, y: 80 + Math.floor(i / 4) * 160 },
+        data: { label: n.name, kind: n.kind, color: NODE_KIND_COLORS[n.kind] ?? "#94a3b8" },
       });
 
       n.connections.forEach((targetId) => {
@@ -414,9 +506,9 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
             id: `e-${key}`,
             source: n.id,
             target: targetId,
-            type: "smoothstep",
+            type: "default",
             animated: false,
-            style: { stroke: "var(--border-color)" },
+            style: { stroke: "var(--border-color)", strokeWidth: 2 },
           });
         }
       });

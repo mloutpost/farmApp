@@ -10,15 +10,17 @@ import { toFirestoreDocument, fromFirestoreDocument } from "@/lib/farm-serialize
 const FIRESTORE_PATH = "data";
 const LOCAL_STORAGE_KEY = "farm-data";
 
-function saveToLocalStorage(nodes: unknown[], groups: unknown[], profile: unknown) {
+interface FarmData { nodes: unknown[]; groups: unknown[]; profile: unknown; tasks?: unknown[]; finances?: unknown[]; flowPositions?: Record<string, { x: number; y: number }> }
+
+function saveToLocalStorage(data: FarmData) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ nodes, groups, profile }));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
   } catch {
     /* quota exceeded */
   }
 }
 
-function loadFromLocalStorage(): { nodes: unknown[]; groups: unknown[]; profile: unknown } | null {
+function loadFromLocalStorage(): FarmData | null {
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!stored) return null;
@@ -27,9 +29,27 @@ function loadFromLocalStorage(): { nodes: unknown[]; groups: unknown[]; profile:
       nodes: parsed.nodes ?? [],
       groups: parsed.groups ?? [],
       profile: parsed.profile ?? {},
+      tasks: parsed.tasks ?? [],
+      finances: parsed.finances ?? [],
+      flowPositions: parsed.flowPositions ?? {},
     };
   } catch {
     return null;
+  }
+}
+
+function applyData(data: FarmData, mergeProfile = false) {
+  if (data.nodes?.length) useFarmStore.setState({ nodes: data.nodes as never[] });
+  if (data.groups?.length) useFarmStore.setState({ groups: data.groups as never[] });
+  if (data.tasks?.length) useFarmStore.setState({ tasks: data.tasks as never[] });
+  if (data.finances?.length) useFarmStore.setState({ finances: data.finances as never[] });
+  if (data.flowPositions && Object.keys(data.flowPositions).length > 0) {
+    useFarmStore.setState({ flowPositions: data.flowPositions });
+  }
+  if (data.profile && Object.keys(data.profile as object).length > 0) {
+    useFarmStore.setState({
+      profile: mergeProfile ? { ...useFarmStore.getState().profile, ...(data.profile as object) } : data.profile as never,
+    });
   }
 }
 
@@ -38,18 +58,27 @@ export function useFarmSync() {
   const nodes = useFarmStore((s) => s.nodes);
   const groups = useFarmStore((s) => s.groups);
   const profile = useFarmStore((s) => s.profile);
+  const tasks = useFarmStore((s) => s.tasks);
+  const finances = useFarmStore((s) => s.finances);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
   const lastSavedRef = useRef<string>("");
 
+  const flowPositions = useFarmStore((s) => s.flowPositions);
+
+  const getPayload = useCallback((): FarmData => {
+    const s = useFarmStore.getState();
+    return { nodes: s.nodes, groups: s.groups, profile: s.profile, tasks: s.tasks, finances: s.finances, flowPositions: s.flowPositions };
+  }, []);
+
   const persistNow = useCallback(() => {
-    const { nodes: n, groups: g, profile: p } = useFarmStore.getState();
-    saveToLocalStorage(n, g, p);
+    const payload = getPayload();
+    saveToLocalStorage(payload);
     if (user) {
-      const docData = toFirestoreDocument({ nodes: n, groups: g, profile: p });
+      const docData = toFirestoreDocument(payload);
       setDoc(doc(db, "users", user.uid, "farm", FIRESTORE_PATH), docData).catch(() => {});
     }
-  }, [user]);
+  }, [user, getPayload]);
 
   const flush = useCallback(() => {
     if (timerRef.current) {
@@ -59,26 +88,13 @@ export function useFarmSync() {
     persistNow();
   }, [persistNow]);
 
-  // Initial load: from localStorage first (instant), then from Firestore when auth ready
   useEffect(() => {
     if (initializedRef.current) return;
-
     const local = loadFromLocalStorage();
-    if (local?.nodes?.length) {
-      useFarmStore.setState({ nodes: local.nodes as never[] });
-    }
-    if (local?.groups?.length) {
-      useFarmStore.setState({ groups: local.groups as never[] });
-    }
-    if (local?.profile && Object.keys(local.profile as object).length > 0) {
-      useFarmStore.setState({
-        profile: { ...useFarmStore.getState().profile, ...(local.profile as object) },
-      });
-    }
+    if (local) applyData(local, true);
     initializedRef.current = true;
   }, []);
 
-  // When auth is ready: load from Firestore, then push any local data to Firestore
   useEffect(() => {
     if (authLoading || !user) return;
 
@@ -87,22 +103,12 @@ export function useFarmSync() {
         const snap = await getDoc(doc(db, "users", user.uid, "farm", FIRESTORE_PATH));
         if (snap.exists()) {
           const data = fromFirestoreDocument(snap.data() as Record<string, unknown>);
-          if (data.nodes?.length) {
-            useFarmStore.setState({ nodes: data.nodes as never[] });
-          }
-          if (data.groups?.length) {
-            useFarmStore.setState({ groups: data.groups as never[] });
-          }
-          if (data.profile && Object.keys(data.profile as object).length > 0) {
-            useFarmStore.setState({
-              profile: { ...useFarmStore.getState().profile, ...(data.profile as object) },
-            });
-          }
+          applyData(data as FarmData, true);
         } else {
-          // Firestore empty – push current store (from localStorage) so we don't lose data
-          const { nodes: n, groups: g, profile: p } = useFarmStore.getState();
-          if (n.length > 0 || (g?.length ?? 0) > 0 || (p && Object.keys(p as object).length > 0)) {
-            const docData = toFirestoreDocument({ nodes: n, groups: g ?? [], profile: p ?? {} });
+          const payload = getPayload();
+          const hasData = (payload.nodes?.length ?? 0) > 0 || (payload.groups?.length ?? 0) > 0;
+          if (hasData) {
+            const docData = toFirestoreDocument(payload);
             await setDoc(doc(db, "users", user.uid, "farm", FIRESTORE_PATH), docData);
           }
         }
@@ -112,20 +118,18 @@ export function useFarmSync() {
     };
 
     loadAndSync();
-  }, [authLoading, user?.uid]);
+  }, [authLoading, user?.uid, getPayload]);
 
-  // Before unload: flush pending save
   useEffect(() => {
     const handleBeforeUnload = () => flush();
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [flush]);
 
-  // Autosave: debounced write to Firestore + localStorage when nodes, groups, or profile change
   useEffect(() => {
     if (!initializedRef.current) return;
 
-    const payload = { nodes, groups, profile };
+    const payload = { nodes, groups, profile, tasks, finances, flowPositions };
     const fingerprint = JSON.stringify(payload);
     if (fingerprint === lastSavedRef.current) return;
 
@@ -134,11 +138,11 @@ export function useFarmSync() {
       timerRef.current = null;
       lastSavedRef.current = fingerprint;
 
-      saveToLocalStorage(nodes, groups, profile);
+      saveToLocalStorage(payload);
 
       if (user) {
         try {
-          const docData = toFirestoreDocument({ nodes, groups, profile });
+          const docData = toFirestoreDocument(payload);
           await setDoc(doc(db, "users", user.uid, "farm", FIRESTORE_PATH), docData);
         } catch {
           /* offline or permission – localStorage already updated */
@@ -152,5 +156,5 @@ export function useFarmSync() {
         timerRef.current = null;
       }
     };
-  }, [nodes, groups, profile, user?.uid]);
+  }, [nodes, groups, profile, tasks, finances, flowPositions, user?.uid]);
 }

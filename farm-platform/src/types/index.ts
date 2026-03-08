@@ -146,6 +146,7 @@ export interface HarvestEntry {
   grade?: string;
   notes?: string;
   revenue?: number;
+  pricePerUnit?: number;
   season?: number;
 }
 
@@ -613,6 +614,87 @@ export function nodeColor(node: FarmNode, groups?: FarmGroup[]): string {
     if (g?.color) return g.color;
   }
   return NODE_KIND_COLORS[node.kind] ?? "#22c55e";
+}
+
+/* ── Tasks ── */
+
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskStatus = "todo" | "in-progress" | "done" | "skipped";
+export type TaskRecurrence = "none" | "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+
+export interface FarmTask {
+  id: string;
+  title: string;
+  notes?: string;
+  nodeId?: string;
+  assignedTo?: string;
+  dueDate?: string;
+  completedDate?: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  recurrence: TaskRecurrence;
+  recurrenceEndDate?: string;
+  category?: "planting" | "watering" | "harvest" | "maintenance" | "livestock" | "equipment" | "other";
+  estimatedMinutes?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ── Financial ── */
+
+export type TransactionType = "expense" | "revenue";
+export type ExpenseCategory = "seed" | "soil" | "amendment" | "fertilizer" | "pesticide" | "equipment" | "fuel" | "labor" | "infrastructure" | "feed" | "veterinary" | "processing" | "marketing" | "other";
+export type RevenueCategory = "produce" | "livestock" | "eggs" | "dairy" | "honey" | "value-added" | "agritourism" | "grant" | "other";
+
+export interface FinancialEntry {
+  id: string;
+  type: TransactionType;
+  date: string;
+  amount: number;
+  category: ExpenseCategory | RevenueCategory;
+  description: string;
+  nodeId?: string;
+  vendor?: string;
+  notes?: string;
+  season?: number;
+  createdAt: string;
+}
+
+/* ── Subscription tiers ── */
+
+export type SubscriptionTier = "free" | "pro" | "team";
+
+export interface UserSubscription {
+  tier: SubscriptionTier;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  expiresAt?: string;
+  maxNodes: number;
+  maxFarms: number;
+  features: string[];
+}
+
+export const TIER_LIMITS: Record<SubscriptionTier, { maxNodes: number; maxFarms: number; features: string[] }> = {
+  free: { maxNodes: 20, maxFarms: 1, features: ["map", "basic-tracking"] },
+  pro: { maxNodes: Infinity, maxFarms: 5, features: ["map", "basic-tracking", "calendar", "tasks", "reports", "financials", "soil-tracking", "weather-enhanced", "ai-recommendations", "pdf-export"] },
+  team: { maxNodes: Infinity, maxFarms: 20, features: ["map", "basic-tracking", "calendar", "tasks", "reports", "financials", "soil-tracking", "weather-enhanced", "ai-recommendations", "pdf-export", "team-collaboration", "multi-user"] },
+};
+
+/* ── Calendar events (derived from plantings + tasks) ── */
+
+export type CalendarEventType = "sow-indoor" | "transplant" | "direct-sow" | "harvest" | "frost-warning" | "task" | "custom";
+
+export interface CalendarEvent {
+  id: string;
+  type: CalendarEventType;
+  title: string;
+  date: string;
+  endDate?: string;
+  nodeId?: string;
+  plantingId?: string;
+  taskId?: string;
+  color?: string;
+  allDay?: boolean;
 }
 
 /* ── Farm profile ── */

@@ -8,7 +8,7 @@ export default function MapPage() {
   return (
     <div className="relative h-full w-full">
       <div className="absolute top-4 right-4 z-20">
-        <WeatherWidget />
+        <WeatherWidget compact />
       </div>
       <MapContainer />
       <SearchPalette />

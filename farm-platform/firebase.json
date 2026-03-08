@@ -5,11 +5,23 @@
   "hosting": {
     "public": "out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" }
+        ]
+      }
+    ],
     "rewrites": [
       { "source": "/flow", "destination": "/flow.html" },
       { "source": "/settings", "destination": "/settings.html" },
       { "source": "/node", "destination": "/node.html" },
-      { "source": "/timeline", "destination": "/timeline.html" }
+      { "source": "/timeline", "destination": "/timeline.html" },
+      { "source": "/calendar", "destination": "/calendar.html" },
+      { "source": "/tasks", "destination": "/tasks.html" },
+      { "source": "/finances", "destination": "/finances.html" },
+      { "source": "/reports", "destination": "/reports.html" }
     ]
   }
 }

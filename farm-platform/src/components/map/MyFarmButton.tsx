@@ -10,7 +10,7 @@ export default function MyFarmButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={onClick}
       title="My Farm — manage nodes"
-      className="flex items-center gap-1.5 rounded-lg border border-border bg-bg-elevated/95 px-3 py-2 text-xs font-medium text-text-primary shadow-md backdrop-blur-sm hover:bg-bg-elevated transition-colors"
+      className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-text-primary hover:bg-bg-surface transition-colors"
     >
       <svg
         width="14"

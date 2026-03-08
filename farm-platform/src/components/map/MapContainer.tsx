@@ -35,12 +35,12 @@ export default function MapContainer() {
         <FarmMap />
       </div>
 
-      <div className="absolute bottom-4 left-4 z-10">
-        <MyFarmButton onClick={() => setPanelOpen(true)} />
-      </div>
-
-      <div className="absolute bottom-4 right-4 z-10">
-        <MapStyleSwitcher />
+      <div className="absolute bottom-4 left-4 z-10 flex items-end gap-2">
+        <div className="flex items-center gap-0 rounded-lg bg-bg-elevated/95 backdrop-blur border border-border shadow-lg overflow-hidden">
+          <MyFarmButton onClick={() => setPanelOpen(true)} />
+          <div className="w-px h-6 bg-border" />
+          <MapStyleSwitcher />
+        </div>
       </div>
 
       <TypePickerModal />

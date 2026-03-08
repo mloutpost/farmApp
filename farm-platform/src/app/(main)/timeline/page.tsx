@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFarmStore } from "@/store/farm-store";
-import type { GardenData, FieldData, Planting, FarmNode } from "@/types";
+import type { GardenData, BedNodeData, GreenhouseData, FieldData, Planting, FarmNode } from "@/types";
 
 interface TimelineEntry {
   nodeId: string;
@@ -44,6 +44,18 @@ export default function TimelinePage() {
       if (node.data.kind === "garden") {
         const gd = node.data as GardenData;
         gd.beds.forEach((bed) => {
+          bed.plantings
+            .filter((p) => !p.season || p.season === showYear)
+            .forEach((p) => result.push({ nodeId: node.id, nodeName: node.name, bedName: bed.name, planting: p }));
+        });
+      } else if (node.data.kind === "bed") {
+        const bd = node.data as BedNodeData;
+        (bd.plantings ?? [])
+          .filter((p) => !p.season || p.season === showYear)
+          .forEach((p) => result.push({ nodeId: node.id, nodeName: node.name, planting: p }));
+      } else if (node.data.kind === "greenhouse") {
+        const ghd = node.data as GreenhouseData;
+        ghd.beds.forEach((bed) => {
           bed.plantings
             .filter((p) => !p.season || p.season === showYear)
             .forEach((p) => result.push({ nodeId: node.id, nodeName: node.name, bedName: bed.name, planting: p }));

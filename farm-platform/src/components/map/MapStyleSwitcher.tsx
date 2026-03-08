@@ -35,7 +35,7 @@ export default function MapStyleSwitcher() {
   const { mapType, setMapType } = useMapStore();
 
   return (
-    <div className="flex gap-0.5 rounded-lg bg-bg-elevated/95 backdrop-blur border border-border p-1 shadow-lg">
+    <div className="flex gap-0.5 p-1">
       {MAP_TYPE_OPTIONS.map((opt) => {
         const active = mapType === opt.key;
         return (

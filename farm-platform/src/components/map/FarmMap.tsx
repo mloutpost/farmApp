@@ -131,9 +131,19 @@ function MapLayers({ map }: { map: google.maps.Map | null }) {
   return null;
 }
 
+function markerScale(zoom: number): number {
+  if (zoom >= 20) return 6;
+  if (zoom >= 18) return 5;
+  if (zoom >= 16) return 4;
+  if (zoom >= 14) return 3.5;
+  if (zoom >= 12) return 3;
+  return 2.5;
+}
+
 function MapWithLayers() {
   const mapRef = useRef<google.maps.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(17);
   const setMap = useSetMap();
   const mapType = useMapStore((s) => s.mapType);
   const mapMarkers = useMapStore((s) => s.mapMarkers);
@@ -186,7 +196,10 @@ function MapWithLayers() {
     const c = map.getCenter?.();
     if (c) useMapStore.getState().setCenter([c.lng(), c.lat()]);
     const z = map.getZoom?.();
-    if (z != null) useMapStore.getState().setZoom(z);
+    if (z != null) {
+      useMapStore.getState().setZoom(z);
+      setCurrentZoom(z);
+    }
   }, []);
 
   return (
@@ -229,11 +242,11 @@ function MapWithLayers() {
             options={{
               icon: {
                 path: google.maps.SymbolPath.CIRCLE,
-                scale: 10,
+                scale: markerScale(currentZoom),
                 fillColor: m.color,
                 fillOpacity: 1,
                 strokeColor: "#ffffff",
-                strokeWeight: 2,
+                strokeWeight: 1.5,
               },
             }}
           />

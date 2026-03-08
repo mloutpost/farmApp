@@ -7,7 +7,7 @@ import FrostPlanting from "./FrostPlanting";
 import CropPicker, { CropInfoCard } from "./CropPicker";
 import { polygonSideLengths, polygonPerimeterFt, formatFt, formatArea } from "@/lib/geo-calc";
 import type { CropEntry } from "@/lib/crop-catalog";
-import type { FarmNode, BedNodeData, Planting } from "@/types";
+import type { FarmNode, FarmProfile, BedNodeData, Planting } from "@/types";
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -21,10 +21,50 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-danger/20 text-danger",
 };
 
-function PlantingRow({ planting, onUpdate, onRemove }: {
+function deriveStatus(datePlanted: string | undefined, currentStatus: Planting["status"]): Planting["status"] {
+  if (currentStatus === "harvested" || currentStatus === "failed") return currentStatus;
+  if (!datePlanted) return "planned";
+  const today = new Date().toISOString().slice(0, 10);
+  if (datePlanted > today) return "planned";
+  return currentStatus === "growing" ? "growing" : "planted";
+}
+
+function computeExpectedHarvest(datePlanted: string | undefined, dtm: number | undefined): string | undefined {
+  if (!datePlanted || !dtm) return undefined;
+  const d = new Date(datePlanted + "T12:00:00");
+  d.setDate(d.getDate() + dtm);
+  return d.toISOString().slice(0, 10);
+}
+
+function addDaysToDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function suggestPlantingDate(entry: CropEntry, profile: FarmProfile): string | undefined {
+  const lastFrost = profile.lastFrostSpring;
+  if (!lastFrost) return undefined;
+
+  const year = new Date().getFullYear();
+  const frostDate = lastFrost.length <= 5 ? `${year}-${lastFrost}` : lastFrost;
+
+  if (entry.sowMethod === "transplant" && entry.sowIndoorsWeeks) {
+    return addDaysToDate(frostDate, 14);
+  }
+
+  if (entry.directSowFrostWeeks != null) {
+    return addDaysToDate(frostDate, -(entry.directSowFrostWeeks * 7));
+  }
+
+  return addDaysToDate(frostDate, 14);
+}
+
+function PlantingRow({ planting, onUpdate, onRemove, profile }: {
   planting: Planting;
   onUpdate: (p: Planting) => void;
   onRemove: () => void;
+  profile: FarmProfile;
 }) {
   const handleCropSelect = (crop: string, entry: CropEntry | null) => {
     const updates: Partial<Planting> = { crop };
@@ -35,15 +75,39 @@ function PlantingRow({ planting, onUpdate, onRemove }: {
       updates.rowSpacingIn = entry.rowSpacingIn;
       updates.plantingDepthIn = entry.plantingDepthIn;
       updates.sowMethod = entry.sowMethod === "both" ? undefined : entry.sowMethod;
+
+      if (!planting.datePlanted) {
+        const suggested = suggestPlantingDate(entry, profile);
+        if (suggested) {
+          updates.datePlanted = suggested;
+          updates.status = deriveStatus(suggested, planting.status);
+          updates.dateExpectedHarvest = computeExpectedHarvest(suggested, entry.dtmMin);
+        }
+      }
     } else {
       updates.catalogId = undefined;
     }
-    onUpdate({ ...planting, ...updates });
+    const merged = { ...planting, ...updates };
+    if (!updates.dateExpectedHarvest) {
+      merged.dateExpectedHarvest = computeExpectedHarvest(merged.datePlanted, merged.daysToMaturity);
+    }
+    onUpdate(merged);
   };
 
+  const handleDateChange = (dateStr: string) => {
+    const datePlanted = dateStr || undefined;
+    const status = deriveStatus(datePlanted, planting.status);
+    const dateExpectedHarvest = computeExpectedHarvest(datePlanted, planting.daysToMaturity);
+    onUpdate({ ...planting, datePlanted, status, dateExpectedHarvest });
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const isOverdue = planting.dateExpectedHarvest && planting.dateExpectedHarvest < today && planting.status !== "harvested" && planting.status !== "failed";
+
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 rounded-md bg-bg px-3 py-2">
+    <div className="rounded-lg border border-border/50 bg-bg overflow-hidden">
+      {/* Row 1: crop + variety + remove */}
+      <div className="flex items-center gap-2 px-3 py-2">
         <div className="flex-1 min-w-0">
           <CropPicker value={planting.crop} catalogId={planting.catalogId} onChange={handleCropSelect} />
         </div>
@@ -53,36 +117,93 @@ function PlantingRow({ planting, onUpdate, onRemove }: {
           placeholder="Variety"
           className="w-24 bg-transparent text-xs text-text-secondary placeholder:text-text-muted outline-none"
         />
-        <input
-          type="number"
-          value={planting.daysToMaturity ?? ""}
-          onChange={(e) => onUpdate({ ...planting, daysToMaturity: e.target.value ? Number(e.target.value) : undefined })}
-          placeholder="DTM"
-          title="Days to maturity"
-          className="w-12 bg-transparent text-xs text-text-secondary placeholder:text-text-muted outline-none text-center"
-        />
-        {planting.plantingDepthIn != null && (
-          <span className="text-[10px] text-text-muted shrink-0" title="Planting depth">{planting.plantingDepthIn}&quot;</span>
-        )}
-        {planting.sowMethod && (
-          <span className="text-[10px] text-text-muted shrink-0">{planting.sowMethod === "direct-sow" ? "DS" : "TP"}</span>
-        )}
-        <select
-          value={planting.status}
-          onChange={(e) => onUpdate({ ...planting, status: e.target.value as Planting["status"] })}
-          className="text-xs bg-transparent rounded px-1 py-0.5 border border-border text-text-primary"
-        >
-          <option value="planned">Planned</option>
-          <option value="planted">Planted</option>
-          <option value="growing">Growing</option>
-          <option value="harvested">Harvested</option>
-          <option value="failed">Failed</option>
-        </select>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLORS[planting.status]}`}>{planting.status}</span>
-        <button onClick={onRemove} className="text-text-muted hover:text-danger transition-colors shrink-0">
+        <button onClick={onRemove} className="text-text-muted hover:text-danger transition-colors shrink-0" title="Remove planting">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
         </button>
       </div>
+
+      {/* Row 2: date, DTM, status */}
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-border/30 bg-bg-surface/30">
+        <div className="flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted shrink-0">
+            <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+          <input
+            type="date"
+            value={planting.datePlanted ?? ""}
+            onChange={(e) => handleDateChange(e.target.value)}
+            className="bg-transparent text-xs text-text-primary outline-none [color-scheme:dark]"
+            title="Planting date"
+          />
+        </div>
+
+        <span className="text-border">|</span>
+
+        <div className="flex items-center gap-1" title="Days to maturity">
+          <span className="text-[10px] text-text-muted">DTM</span>
+          <input
+            type="number"
+            value={planting.daysToMaturity ?? ""}
+            onChange={(e) => {
+              const dtm = e.target.value ? Number(e.target.value) : undefined;
+              const dateExpectedHarvest = computeExpectedHarvest(planting.datePlanted, dtm);
+              onUpdate({ ...planting, daysToMaturity: dtm, dateExpectedHarvest });
+            }}
+            placeholder="—"
+            className="w-10 bg-transparent text-xs text-text-secondary placeholder:text-text-muted outline-none text-center"
+          />
+        </div>
+
+        {planting.plantingDepthIn != null && (
+          <>
+            <span className="text-border">|</span>
+            <span className="text-[10px] text-text-muted shrink-0" title="Planting depth">{planting.plantingDepthIn}&quot; deep</span>
+          </>
+        )}
+
+        {planting.sowMethod && (
+          <>
+            <span className="text-border">|</span>
+            <span className="text-[10px] text-text-muted shrink-0">{planting.sowMethod === "direct-sow" ? "Direct sow" : "Transplant"}</span>
+          </>
+        )}
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <select
+            value={planting.status}
+            onChange={(e) => onUpdate({ ...planting, status: e.target.value as Planting["status"] })}
+            className="text-[11px] bg-transparent rounded px-1 py-0.5 border border-border text-text-primary cursor-pointer"
+          >
+            <option value="planned">Planned</option>
+            <option value="planted">Planted</option>
+            <option value="growing">Growing</option>
+            <option value="harvested">Harvested</option>
+            <option value="failed">Failed</option>
+          </select>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[planting.status]}`}>
+            {planting.status}
+          </span>
+        </div>
+      </div>
+
+      {/* Row 3: harvest estimate (if we have enough data) */}
+      {planting.dateExpectedHarvest && (
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 border-t border-border/30 text-[11px] ${isOverdue ? "bg-danger/5 text-danger" : "text-text-muted"}`}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+            <path d="M12 8v4l3 3" /><circle cx="12" cy="12" r="10" />
+          </svg>
+          {isOverdue ? "Harvest overdue — expected" : "Expected harvest"}{" "}
+          <span className="font-medium text-text-secondary">
+            {new Date(planting.dateExpectedHarvest + "T12:00:00").toLocaleDateString("default", { month: "short", day: "numeric" })}
+          </span>
+          {planting.datePlanted && planting.daysToMaturity && (
+            <span className="text-text-muted/60">
+              ({planting.daysToMaturity}d from planting)
+            </span>
+          )}
+        </div>
+      )}
+
       {planting.catalogId && <CropInfoCard catalogId={planting.catalogId} />}
     </div>
   );
@@ -91,6 +212,7 @@ function PlantingRow({ planting, onUpdate, onRemove }: {
 export default function BedDetail({ node }: { node: FarmNode }) {
   const router = useRouter();
   const updateNodeData = useFarmStore((s) => s.updateNodeData);
+  const profile = useFarmStore((s) => s.profile);
   const parentGarden = useFarmStore((s) => node.parentId ? s.nodes.find((n) => n.id === node.parentId) : null);
   const data = node.data as BedNodeData;
   const plantings = data.plantings ?? [];
@@ -230,7 +352,7 @@ export default function BedDetail({ node }: { node: FarmNode }) {
         </div>
         <div className="space-y-2">
           {plantings.map((p) => (
-            <PlantingRow key={p.id} planting={p} onUpdate={updatePlanting} onRemove={() => removePlanting(p.id)} />
+            <PlantingRow key={p.id} planting={p} onUpdate={updatePlanting} onRemove={() => removePlanting(p.id)} profile={profile} />
           ))}
         </div>
         {plantings.length === 0 && (

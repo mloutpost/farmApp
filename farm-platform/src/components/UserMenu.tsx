@@ -4,10 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   signOut,
-  signInWithRedirect,
+  signInWithPopup,
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  type AuthError,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -65,11 +66,17 @@ export default function UserMenu() {
     setAuthError(null);
     setAuthLoading(true);
     try {
-      await signInWithRedirect(auth, new GoogleAuthProvider());
+      await signInWithPopup(auth, new GoogleAuthProvider());
       setSignInOpen(false);
-      /* Page will redirect to Google; user returns to app after sign-in */
     } catch (e) {
-      setAuthError(e instanceof Error ? e.message : "Google sign-in failed");
+      const err = e as AuthError;
+      if (err?.code === "auth/popup-blocked") {
+        setAuthError("Popup blocked. Allow popups for this site, or try again.");
+      } else if (err?.code === "auth/popup-closed-by-user") {
+        setAuthError(null);
+      } else {
+        setAuthError(err?.message ?? "Google sign-in failed");
+      }
       setAuthLoading(false);
     }
   };
@@ -145,7 +152,7 @@ export default function UserMenu() {
               </svg>
               Continue with Google
             </button>
-            <p className="text-[10px] text-text-muted -mt-2 mb-2">Redirects to Google, then back</p>
+            <p className="text-[10px] text-text-muted -mt-2 mb-2">Opens a popup to sign in with Google</p>
 
             <div className="flex items-center gap-2 my-3">
               <div className="flex-1 h-px bg-border" />

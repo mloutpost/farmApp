@@ -311,6 +311,92 @@ export function IconPowerline({ size = 14 }: { size?: number }) {
   );
 }
 
+export function IconVineyard({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <path d="M12 22V8" />
+      <path d="M8 12a4 4 0 0 0 8 0" />
+      <circle cx="8" cy="6" r="2" />
+      <circle cx="16" cy="6" r="2" />
+      <circle cx="12" cy="3" r="2" />
+    </svg>
+  );
+}
+
+export function IconWoodlot({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <path d="M8 22v-6" />
+      <path d="M16 22v-6" />
+      <path d="M8 16l-4-5h8l-4-5h8l-4-5h8l-4 5h8l-4 5h8l-4 5" />
+    </svg>
+  );
+}
+
+export function IconCorral({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <rect x="3" y="6" width="18" height="12" rx="1" />
+      <path d="M3 10h18M3 14h18" />
+      <path d="M9 6v12M15 6v12" />
+    </svg>
+  );
+}
+
+export function IconCoop({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <path d="M3 21V11l9-7 9 7v10" />
+      <path d="M9 21v-4a3 3 0 0 1 6 0v4" />
+      <circle cx="12" cy="11" r="1.5" />
+    </svg>
+  );
+}
+
+export function IconCellar({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <path d="M4 12h16" />
+      <path d="M4 12v8h16v-8" />
+      <path d="M4 12l4-6h8l4 6" />
+      <path d="M8 16h8" />
+    </svg>
+  );
+}
+
+export function IconSmokehouse({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <rect x="5" y="10" width="14" height="12" rx="1" />
+      <path d="M5 10l7-6 7 6" />
+      <path d="M10 4c0-1 1-2 2-2s2 1 2 2" />
+      <path d="M10 16h4M10 19h4" />
+    </svg>
+  );
+}
+
+export function IconBuilding({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <rect x="3" y="10" width="18" height="12" rx="1" />
+      <path d="M3 10l9-8 9 8" />
+      <rect x="9" y="15" width="6" height="7" />
+      <rect x="5" y="13" width="3" height="3" />
+      <rect x="16" y="13" width="3" height="3" />
+    </svg>
+  );
+}
+
+export function IconRainwater({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={iconClass}>
+      <path d="M7 20h10a3 3 0 0 0 3-3V9a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3z" />
+      <path d="M12 2v4M8 3l1 3M16 3l-1 3" />
+      <path d="M8 14h8" />
+    </svg>
+  );
+}
+
 const KIND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   garden: IconGarden,
   field: IconField,
@@ -318,6 +404,10 @@ const KIND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   orchard: IconOrchard,
   pond: IconPond,
   greenhouse: IconGreenhouse,
+  vineyard: IconVineyard,
+  woodlot: IconWoodlot,
+  corral: IconCorral,
+  building: IconBuilding,
   well: IconWater,
   pump: IconPump,
   barn: IconInfrastructure,
@@ -327,6 +417,10 @@ const KIND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   silo: IconSilo,
   beehive: IconBeehive,
   gate: IconGate,
+  coop: IconCoop,
+  cellar: IconCellar,
+  smokehouse: IconSmokehouse,
+  rainwater: IconRainwater,
   irrigation: IconStream,
   fence: IconEquipment,
   stream: IconStream,

@@ -14,6 +14,7 @@ function fingerprint(): string {
 
 function rebuildMapLayers() {
   const { nodes, groups } = useFarmStore.getState();
+  const { layers } = useMapStore.getState();
 
   const markers: Array<{ id: string; name: string; lat: number; lng: number; type: string; color: string }> = [];
   const nodeLayers: MapLayer[] = [];
@@ -36,6 +37,7 @@ function rebuildMapLayers() {
         });
       }
     } else if (geo.type === "Polygon" || geo.type === "LineString") {
+      const existing = layers.find((l) => l.id === `node-${node.id}`);
       nodeLayers.push({
         id: `node-${node.id}`,
         farmId: "farm-1",
@@ -51,15 +53,14 @@ function rebuildMapLayers() {
             },
           ],
         } as any,
-        visible: true,
-        opacity: 0.8,
+        visible: existing?.visible ?? true,
+        opacity: existing?.opacity ?? 0.8,
         nodeId: node.id,
         createdAt: new Date(),
       });
     }
   });
 
-  const { layers } = useMapStore.getState();
   const surveyLayers = layers.filter((l) => !l.id.startsWith("node-"));
   useMapStore.getState().setMapMarkers(markers);
   useMapStore.getState().setLayers([...surveyLayers, ...nodeLayers]);

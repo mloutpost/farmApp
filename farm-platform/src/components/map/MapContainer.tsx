@@ -3,7 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useSyncFarmToMap } from "@/hooks/useSyncFarmToMap";
-import DrawToolbar from "./DrawToolbar";
+import MapActionsPanel from "./MapActionsPanel";
 import MapStyleSwitcher from "./MapStyleSwitcher";
 import TypePickerModal from "./TypePickerModal";
 import MyFarmButton from "./MyFarmButton";
@@ -28,7 +28,7 @@ export default function MapContainer() {
   return (
     <div className="relative h-full w-full">
       <div className="absolute left-4 top-4 z-10">
-        <DrawToolbar />
+        <MapActionsPanel />
       </div>
 
       <div className="absolute inset-0">

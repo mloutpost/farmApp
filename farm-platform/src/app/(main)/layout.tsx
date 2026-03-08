@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useFarmSync } from "@/hooks/useFarmSync";
+import LoadDemoBanner from "@/components/LoadDemoBanner";
+import UserMenu from "@/components/UserMenu";
 
 const NAV_ITEMS = [
   { href: "/", label: "Map" },
@@ -38,10 +40,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             );
           })}
         </nav>
-        <span className="text-xs font-medium tracking-wide text-text-muted uppercase">
-          Farm Platform
-        </span>
+        <UserMenu />
       </header>
+      <LoadDemoBanner />
       <main className="flex-1 min-h-0 overflow-hidden">{children}</main>
     </div>
   );

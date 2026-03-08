@@ -2,13 +2,13 @@ import type { GeoJSON } from "geojson";
 
 /* ── Node kinds by geometry ── */
 
-export type AreaKind = "garden" | "field" | "pasture" | "orchard" | "pond" | "greenhouse";
-export type PointKind = "well" | "pump" | "barn" | "compost" | "spring" | "shop" | "silo" | "beehive" | "gate";
+export type AreaKind = "garden" | "field" | "pasture" | "orchard" | "pond" | "greenhouse" | "vineyard" | "woodlot" | "corral" | "building";
+export type PointKind = "well" | "pump" | "barn" | "compost" | "spring" | "shop" | "silo" | "beehive" | "gate" | "coop" | "cellar" | "smokehouse" | "rainwater";
 export type LineKind = "irrigation" | "fence" | "stream" | "road" | "pipeline" | "ditch" | "powerline";
 export type NodeKind = AreaKind | PointKind | LineKind;
 
-export const AREA_KINDS: AreaKind[] = ["garden", "field", "pasture", "orchard", "pond", "greenhouse"];
-export const POINT_KINDS: PointKind[] = ["well", "pump", "barn", "compost", "spring", "shop", "silo", "beehive", "gate"];
+export const AREA_KINDS: AreaKind[] = ["garden", "field", "pasture", "orchard", "pond", "greenhouse", "vineyard", "woodlot", "corral", "building"];
+export const POINT_KINDS: PointKind[] = ["well", "pump", "barn", "compost", "spring", "shop", "silo", "beehive", "gate", "coop", "cellar", "smokehouse", "rainwater"];
 export const LINE_KINDS: LineKind[] = ["irrigation", "fence", "stream", "road", "pipeline", "ditch", "powerline"];
 
 export const NODE_KIND_LABELS: Record<NodeKind, string> = {
@@ -27,6 +27,14 @@ export const NODE_KIND_LABELS: Record<NodeKind, string> = {
   silo: "Silo / Grain Bin",
   beehive: "Beehive / Apiary",
   gate: "Gate / Access",
+  vineyard: "Vineyard / Berry Patch",
+  woodlot: "Woodlot / Timber",
+  corral: "Corral / Pen",
+  building: "Building",
+  coop: "Chicken Coop / Poultry",
+  cellar: "Root Cellar / Cold Storage",
+  smokehouse: "Smokehouse / Processing",
+  rainwater: "Rainwater Collection",
   irrigation: "Irrigation Line",
   fence: "Fence",
   stream: "Stream / Waterway",
@@ -52,6 +60,14 @@ export const NODE_KIND_COLORS: Record<NodeKind, string> = {
   silo: "#d97706",
   beehive: "#fbbf24",
   gate: "#a8a29e",
+  vineyard: "#8b5cf6",
+  woodlot: "#65a30d",
+  corral: "#b45309",
+  building: "#6b7280",
+  coop: "#f97316",
+  cellar: "#78716c",
+  smokehouse: "#dc2626",
+  rainwater: "#0284c7",
   irrigation: "#22d3ee",
   fence: "#78716c",
   stream: "#0ea5e9",
@@ -408,6 +424,111 @@ export interface PowerlineData {
   servesNodeIds: string[];
 }
 
+export interface VineyardData {
+  kind: "vineyard";
+  acreage?: number;
+  vineCrop?: "grape" | "blackberry" | "raspberry" | "blueberry" | "muscadine" | "other";
+  trellisType?: "VSP" | "high-wire" | "T-trellis" | "none";
+  rowCount?: number;
+  rowSpacingFt?: number;
+  vinesPerRow?: number;
+  varieties: string[];
+  plantedYear?: number;
+  pruningLog: Array<{ date: string; notes?: string }>;
+  spraySchedule: Array<{ date: string; product: string; rate?: string; notes?: string }>;
+}
+
+export interface WoodlotData {
+  kind: "woodlot";
+  acreage?: number;
+  primarySpecies: string[];
+  purpose?: "firewood" | "timber" | "maple-syrup" | "nut-harvest" | "conservation" | "mixed";
+  cordsOnHand?: number;
+  boardFeetEstimate?: number;
+  lastHarvestDate?: string;
+  harvestLog: Array<{ date: string; species?: string; cords?: number; boardFeet?: number; notes?: string }>;
+  managementNotes?: string;
+}
+
+export interface CorralData {
+  kind: "corral";
+  sqft?: number;
+  surfaceType?: "dirt" | "gravel" | "concrete" | "grass" | "sand";
+  purpose?: "holding" | "sorting" | "loading" | "training" | "run" | "exercise";
+  capacity?: string;
+  shelterType?: string;
+  connectedPastures: string[];
+  animals?: string;
+}
+
+export interface BuildingData {
+  kind: "building";
+  buildingType?: "house" | "cabin" | "mobile-home" | "office" | "shed" | "garage" | "equipment-shelter" | "storage" | "wash-station" | "milk-house" | "apartment" | "bunkhouse" | "other";
+  sqft?: number;
+  stories?: number;
+  yearBuilt?: number;
+  construction?: "wood-frame" | "pole-barn" | "metal" | "block" | "brick" | "log" | "other";
+  roofType?: "metal" | "shingle" | "flat" | "other";
+  foundation?: "slab" | "crawl-space" | "basement" | "pier" | "none";
+  heating?: string;
+  cooling?: string;
+  power?: "grid" | "solar" | "generator" | "none";
+  water?: "well" | "municipal" | "spring" | "rainwater" | "none";
+  septic?: "septic" | "sewer" | "composting" | "outhouse" | "none";
+  condition?: "excellent" | "good" | "fair" | "poor";
+  insured?: boolean;
+  currentUse?: string;
+  notes?: string;
+}
+
+export interface CoopData {
+  kind: "coop";
+  coopType?: "stationary" | "tractor" | "A-frame" | "shed" | "barn-section";
+  sqft?: number;
+  flockSize?: number;
+  birdType?: "chicken-layer" | "chicken-meat" | "duck" | "turkey" | "quail" | "guinea" | "goose" | "mixed";
+  breeds: string[];
+  nestBoxes?: number;
+  eggColor?: string;
+  heatedWater?: boolean;
+  supplementalLight?: boolean;
+  eggLog: Array<{ date: string; count: number; notes?: string }>;
+  flockLog: Array<{ date: string; event: string; count?: number; notes?: string }>;
+  feedType?: string;
+  feedLbsPerWeek?: number;
+}
+
+export interface CellarData {
+  kind: "cellar";
+  cellarType?: "underground" | "walkout" | "converted" | "spring-house" | "cooler";
+  sqft?: number;
+  avgTempF?: number;
+  avgHumidity?: number;
+  shelving?: string;
+  inventory: Array<{ item: string; quantity: string; storedDate: string; expiresDate?: string; notes?: string }>;
+}
+
+export interface SmokehouseData {
+  kind: "smokehouse";
+  smokerType?: "offset" | "vertical" | "cold-smoke" | "hot-smoke" | "smokehouse-building";
+  fuelType?: "hickory" | "oak" | "mesquite" | "apple" | "cherry" | "pecan" | "mixed";
+  capacity?: string;
+  smokingLog: Array<{ date: string; product: string; weightLbs?: number; method?: string; tempF?: number; durationHrs?: number; notes?: string }>;
+  brineRecipes: Array<{ name: string; ingredients: string; notes?: string }>;
+}
+
+export interface RainwaterData {
+  kind: "rainwater";
+  collectionType?: "barrel" | "cistern" | "tank" | "underground" | "IBC-tote";
+  capacityGallons?: number;
+  currentGallons?: number;
+  roofAreaSqFt?: number;
+  filterType?: string;
+  connectedTo?: string;
+  potable?: boolean;
+  maintenanceLog: Array<{ date: string; task: string; notes?: string }>;
+}
+
 export type NodeData =
   | GardenData
   | FieldData
@@ -415,6 +536,10 @@ export type NodeData =
   | OrchardData
   | PondData
   | GreenhouseData
+  | VineyardData
+  | WoodlotData
+  | CorralData
+  | BuildingData
   | WellData
   | PumpData
   | BarnData
@@ -424,6 +549,10 @@ export type NodeData =
   | SiloData
   | BeehiveData
   | GateData
+  | CoopData
+  | CellarData
+  | SmokehouseData
+  | RainwaterData
   | IrrigationData
   | FenceData
   | StreamData

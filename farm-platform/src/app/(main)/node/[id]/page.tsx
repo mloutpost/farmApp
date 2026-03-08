@@ -2,7 +2,7 @@
 
 import { useRouter, useParams } from "next/navigation";
 import { useFarmStore } from "@/store/farm-store";
-import { NODE_KIND_LABELS, NODE_KIND_COLORS, AREA_KINDS } from "@/types";
+import { NODE_KIND_LABELS, NODE_KIND_COLORS, AREA_KINDS, POINT_KINDS, LINE_KINDS } from "@/types";
 import type { NodeKind } from "@/types";
 import ActivityLog from "@/components/detail/ActivityLog";
 import HarvestLog from "@/components/detail/HarvestLog";
@@ -30,6 +30,14 @@ import RoadDetail from "@/components/detail/RoadDetail";
 import PipelineDetail from "@/components/detail/PipelineDetail";
 import DitchDetail from "@/components/detail/DitchDetail";
 import PowerlineDetail from "@/components/detail/PowerlineDetail";
+import VineyardDetail from "@/components/detail/VineyardDetail";
+import WoodlotDetail from "@/components/detail/WoodlotDetail";
+import CorralDetail from "@/components/detail/CorralDetail";
+import CoopDetail from "@/components/detail/CoopDetail";
+import CellarDetail from "@/components/detail/CellarDetail";
+import SmokehouseDetail from "@/components/detail/SmokehouseDetail";
+import RainwaterDetail from "@/components/detail/RainwaterDetail";
+import BuildingDetail from "@/components/detail/BuildingDetail";
 import { useState } from "react";
 
 const DETAIL_COMPONENTS: Record<NodeKind, React.ComponentType<{ node: any }>> = {
@@ -39,6 +47,10 @@ const DETAIL_COMPONENTS: Record<NodeKind, React.ComponentType<{ node: any }>> = 
   orchard: OrchardDetail,
   pond: PondDetail,
   greenhouse: GreenhouseDetail,
+  vineyard: VineyardDetail,
+  woodlot: WoodlotDetail,
+  corral: CorralDetail,
+  building: BuildingDetail,
   well: WellDetail,
   pump: PumpDetail,
   barn: BarnDetail,
@@ -48,6 +60,10 @@ const DETAIL_COMPONENTS: Record<NodeKind, React.ComponentType<{ node: any }>> = 
   silo: SiloDetail,
   beehive: BeehiveDetail,
   gate: GateDetail,
+  coop: CoopDetail,
+  cellar: CellarDetail,
+  smokehouse: SmokehouseDetail,
+  rainwater: RainwaterDetail,
   irrigation: IrrigationDetail,
   fence: FenceDetail,
   stream: StreamDetail,
@@ -89,8 +105,10 @@ export default function NodeDetailPage() {
   const nodeId = params.id as string;
   const node = useFarmStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNode = useFarmStore((s) => s.updateNode);
+  const changeNodeKind = useFarmStore((s) => s.changeNodeKind);
   const removeNode = useFarmStore((s) => s.removeNode);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showKindPicker, setShowKindPicker] = useState(false);
 
   if (!node) {
     return (
@@ -106,8 +124,15 @@ export default function NodeDetailPage() {
   }
 
   const DetailComponent = DETAIL_COMPONENTS[node.kind];
-  const HARVESTABLE: string[] = ["garden", "field", "pasture", "orchard", "pond", "greenhouse", "beehive"];
+  const HARVESTABLE: string[] = ["garden", "field", "pasture", "orchard", "pond", "greenhouse", "vineyard", "woodlot", "beehive", "coop"];
   const showHarvest = HARVESTABLE.includes(node.kind);
+
+  const geoType = node.geometry && "type" in node.geometry ? (node.geometry as { type: string }).type : null;
+  const compatibleKinds: NodeKind[] =
+    geoType === "Polygon" ? [...AREA_KINDS] :
+    geoType === "Point" ? [...POINT_KINDS] :
+    geoType === "LineString" ? [...LINE_KINDS] :
+    [...AREA_KINDS, ...POINT_KINDS, ...LINE_KINDS];
 
   const handleDelete = () => {
     removeNode(node.id);
@@ -134,12 +159,44 @@ export default function NodeDetailPage() {
               className="text-xl font-bold bg-transparent text-text-primary outline-none w-full"
             />
           </div>
-          <span
-            className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full"
-            style={{ backgroundColor: `${NODE_KIND_COLORS[node.kind]}20`, color: NODE_KIND_COLORS[node.kind] }}
-          >
-            {NODE_KIND_LABELS[node.kind]}
-          </span>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowKindPicker(!showKindPicker)}
+              className="text-xs font-medium px-2.5 py-1 rounded-full transition-colors hover:ring-1 hover:ring-current cursor-pointer"
+              style={{ backgroundColor: `${NODE_KIND_COLORS[node.kind]}20`, color: NODE_KIND_COLORS[node.kind] }}
+            >
+              {NODE_KIND_LABELS[node.kind]}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="inline-block ml-1 -mt-0.5">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            {showKindPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowKindPicker(false)} aria-hidden />
+                <div className="absolute right-0 top-full mt-1 z-50 w-56 max-h-72 overflow-y-auto rounded-lg border border-border bg-bg-elevated shadow-xl">
+                  {compatibleKinds.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        if (k !== node.kind) changeNodeKind(node.id, k);
+                        setShowKindPicker(false);
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${
+                        k === node.kind
+                          ? "bg-bg-surface font-medium text-text-primary"
+                          : "text-text-secondary hover:bg-bg-surface hover:text-text-primary"
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: NODE_KIND_COLORS[k] }} />
+                      {NODE_KIND_LABELS[k]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="text-xs text-text-muted mb-8">

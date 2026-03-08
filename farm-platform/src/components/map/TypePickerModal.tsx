@@ -111,6 +111,18 @@ export default function TypePickerModal() {
     if (kind === "pond" && stats.acres) {
       updateNodeData(id, { acreage: Math.round(stats.acres * 100) / 100 } as Partial<PondData>);
     }
+    if (kind === "vineyard" && stats.acres) {
+      updateNodeData(id, { acreage: Math.round(stats.acres * 100) / 100 } as any);
+    }
+    if (kind === "woodlot" && stats.acres) {
+      updateNodeData(id, { acreage: Math.round(stats.acres * 100) / 100 } as any);
+    }
+    if (kind === "corral" && stats.areaSqFt) {
+      updateNodeData(id, { sqft: Math.round(stats.areaSqFt) } as any);
+    }
+    if (kind === "building" && stats.areaSqFt) {
+      updateNodeData(id, { sqft: Math.round(stats.areaSqFt) } as any);
+    }
     if (kind === "irrigation" && stats.lengthFt) {
       updateNodeData(id, { lengthFt: Math.round(stats.lengthFt) } as Partial<IrrigationData>);
     }

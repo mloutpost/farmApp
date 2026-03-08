@@ -1,14 +1,75 @@
 "use client";
 
+import { useState } from "react";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { useFarmStore } from "@/store/farm-store";
+import { useAuth } from "@/hooks/useAuth";
 import SurveyImport from "@/components/settings/SurveyImport";
 import GeoJsonNodeImport from "@/components/settings/GeoJsonNodeImport";
 import AddressSearch from "@/components/settings/AddressSearch";
+import { toFirestoreDocument, fromFirestoreDocument } from "@/lib/farm-serialize";
 
 export default function SettingsPage() {
   const profile = useFarmStore((s) => s.profile);
   const updateProfile = useFarmStore((s) => s.updateProfile);
   const nodes = useFarmStore((s) => s.nodes);
+  const groups = useFarmStore((s) => s.groups);
+  const { user, loading: authLoading } = useAuth();
+  const [demoSaveStatus, setDemoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [demoSaveError, setDemoSaveError] = useState<string | null>(null);
+  const [demoLoadStatus, setDemoLoadStatus] = useState<"idle" | "loading" | "loaded" | "error" | "empty">("idle");
+
+  const handleSaveAsDemo = async () => {
+    if (!user) {
+      setDemoSaveError("Sign in required. Use the Sign in button in the top right.");
+      setDemoSaveStatus("error");
+      setTimeout(() => { setDemoSaveStatus("idle"); setDemoSaveError(null); }, 5000);
+      return;
+    }
+    setDemoSaveStatus("saving");
+    setDemoSaveError(null);
+    try {
+      const docData = toFirestoreDocument({ nodes, groups, profile });
+      await setDoc(doc(db, "demo", "farm"), docData);
+      setDemoSaveStatus("saved");
+      setTimeout(() => setDemoSaveStatus("idle"), 2000);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to save";
+      setDemoSaveError(msg);
+      setDemoSaveStatus("error");
+      setTimeout(() => { setDemoSaveStatus("idle"); setDemoSaveError(null); }, 5000);
+    }
+  };
+
+  const handleLoadDemo = async () => {
+    setDemoLoadStatus("loading");
+    try {
+      const snap = await getDoc(doc(db, "demo", "farm"));
+      if (!snap.exists()) {
+        setDemoLoadStatus("empty");
+        setTimeout(() => setDemoLoadStatus("idle"), 2000);
+        return;
+      }
+      const data = fromFirestoreDocument(snap.data() as Record<string, unknown>);
+      if (data.nodes?.length) {
+        useFarmStore.setState({ nodes: data.nodes as never[] });
+      }
+      if (data.groups?.length) {
+        useFarmStore.setState({ groups: data.groups as never[] });
+      }
+      if (data.profile && Object.keys(data.profile as object).length > 0) {
+        useFarmStore.setState({
+          profile: { ...useFarmStore.getState().profile, ...(data.profile as object) },
+        });
+      }
+      setDemoLoadStatus("loaded");
+      setTimeout(() => setDemoLoadStatus("idle"), 2000);
+    } catch {
+      setDemoLoadStatus("error");
+      setTimeout(() => setDemoLoadStatus("idle"), 3000);
+    }
+  };
 
   const handleFullExport = () => {
     const payload = { profile, nodes, exportedAt: new Date().toISOString() };
@@ -150,12 +211,52 @@ export default function SettingsPage() {
           <section className="rounded-xl border border-border bg-bg-elevated p-6">
             <h2 className="text-base font-medium text-text-primary mb-2">Data Export</h2>
             <p className="text-sm text-text-muted mb-4">Export all farm data for backup or migration.</p>
-            <button
-              onClick={handleFullExport}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-black hover:bg-accent-hover transition-colors"
-            >
-              Export Full Farm Data
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleFullExport}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-black hover:bg-accent-hover transition-colors"
+              >
+                Export Full Farm Data
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border bg-bg-elevated p-6">
+            <h2 className="text-base font-medium text-text-primary mb-1">Demo data</h2>
+            <p className="text-sm text-text-muted mb-4">
+              Save your current farm as demo data. New users can load it to explore the app without starting from scratch.
+            </p>
+            {demoSaveError && (
+              <p className="text-sm text-danger mb-3">{demoSaveError}</p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleSaveAsDemo}
+                disabled={demoSaveStatus === "saving" || nodes.length === 0 || authLoading}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-black hover:bg-accent-hover transition-colors disabled:opacity-50"
+              >
+                {demoSaveStatus === "saving" || demoSaveStatus === "idle"
+                  ? "Save as demo data"
+                  : demoSaveStatus === "saved"
+                    ? "Saved"
+                    : "Error – try again"}
+              </button>
+              <button
+                onClick={handleLoadDemo}
+                disabled={demoLoadStatus === "loading"}
+                className="rounded-md border border-border bg-bg-surface px-4 py-2 text-sm font-medium text-text-primary hover:bg-bg-elevated transition-colors disabled:opacity-50"
+              >
+                {demoLoadStatus === "loading"
+                  ? "Loading…"
+                  : demoLoadStatus === "loaded"
+                    ? "Loaded"
+                    : demoLoadStatus === "empty"
+                      ? "No demo yet"
+                      : demoLoadStatus === "error"
+                        ? "Error"
+                        : "Load demo farm"}
+              </button>
+            </div>
           </section>
         </div>
       </div>

@@ -23,6 +23,8 @@ import type {
   NODE_KIND_COLORS,
 } from "@/types";
 import type { GeoJSON } from "geojson";
+import { mergeLineSegments } from "@/lib/merge-lines";
+import { NODE_KIND_LABELS } from "@/types";
 
 function uid(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -78,6 +80,22 @@ function emptyData(kind: NodeKind): NodeData {
       return { kind: "ditch" };
     case "powerline":
       return { kind: "powerline", servesNodeIds: [] };
+    case "vineyard":
+      return { kind: "vineyard", varieties: [], pruningLog: [], spraySchedule: [] };
+    case "woodlot":
+      return { kind: "woodlot", primarySpecies: [], harvestLog: [] };
+    case "corral":
+      return { kind: "corral", connectedPastures: [] };
+    case "building":
+      return { kind: "building" };
+    case "coop":
+      return { kind: "coop", breeds: [], eggLog: [], flockLog: [] };
+    case "cellar":
+      return { kind: "cellar", inventory: [] };
+    case "smokehouse":
+      return { kind: "smokehouse", smokingLog: [], brineRecipes: [] };
+    case "rainwater":
+      return { kind: "rainwater", maintenanceLog: [] };
   }
 }
 
@@ -92,6 +110,7 @@ interface FarmStore {
   updateGroup: (id: string, updates: Partial<FarmGroup>) => void;
   removeGroup: (id: string) => void;
   updateNode: (id: string, updates: Partial<FarmNode>) => void;
+  changeNodeKind: (id: string, newKind: NodeKind) => void;
   updateNodeData: (id: string, data: Partial<NodeData>) => void;
   removeNode: (id: string) => void;
   setSelected: (id: string | null) => void;
@@ -107,6 +126,7 @@ interface FarmStore {
   bulkLogActivity: (nodeIds: string[], entry: Omit<ActivityEntry, "id">) => void;
 
   copyLastSeason: (fromYear: number, toYear: number) => void;
+  mergeLineNodes: (kind: NodeKind) => number;
 
   updateProfile: (updates: Partial<FarmProfile>) => void;
 
@@ -165,6 +185,16 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === id ? { ...n, ...updates, updatedAt: now() } : n
+      ),
+    }));
+  },
+
+  changeNodeKind: (id, newKind) => {
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id
+          ? { ...n, kind: newKind, data: emptyData(newKind), updatedAt: now() }
+          : n
       ),
     }));
   },
@@ -295,6 +325,57 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
       });
       return { nodes: updated };
     });
+  },
+
+  mergeLineNodes: (kind) => {
+    const { nodes } = get();
+    const targets = nodes.filter(
+      (n) => n.kind === kind && n.geometry && (n.geometry as { type: string }).type === "LineString"
+    );
+    if (targets.length < 2) return 0;
+
+    const lines: number[][][] = [];
+    for (const n of targets) {
+      const geo = n.geometry as { type: string; coordinates?: number[][] | number[][][] };
+      const coords = geo?.coordinates;
+      if (!coords) continue;
+      if (Array.isArray(coords[0]) && typeof coords[0][0] === "number") {
+        lines.push(coords as number[][]);
+      } else if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
+        (coords as number[][][]).forEach((ring) => {
+          if (Array.isArray(ring) && ring.length >= 2) lines.push(ring);
+        });
+      }
+    }
+    if (lines.length < 2) return 0;
+
+    const merged = mergeLineSegments(lines);
+    const targetIds = new Set(targets.map((n) => n.id));
+    const label = NODE_KIND_LABELS[kind] ?? kind;
+    const ts = now();
+
+    const newNodes: FarmNode[] = merged.map((coords, i) => ({
+      id: uid(),
+      kind,
+      name: merged.length === 1 ? label : `${label} ${i + 1}`,
+      geometry: { type: "LineString", coordinates: coords } as GeoJSON,
+      connections: [],
+      data: emptyData(kind),
+      activityLog: [],
+      harvestLog: [],
+      photos: [],
+      createdAt: ts,
+      updatedAt: ts,
+    }));
+
+    set((s) => ({
+      nodes: [
+        ...s.nodes.filter((n) => !targetIds.has(n.id)),
+        ...newNodes,
+      ],
+    }));
+
+    return targets.length - merged.length;
   },
 
   updateProfile: (updates) => {

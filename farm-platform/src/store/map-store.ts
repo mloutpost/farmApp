@@ -31,10 +31,14 @@ interface MapState {
   selectedMapNodeId: string | null;
   /** Map markers (nodes on map) */
   mapMarkers: Array<{ id: string; name: string; lat: number; lng: number; type: string; color: string }>;
+  /** Hidden marker IDs (point nodes toggled off in layers panel) */
+  hiddenMarkerIds: Set<string>;
 
   setMapType: (mapType: GoogleMapType) => void;
   setSelectedMapNode: (id: string | null) => void;
   setMapMarkers: (markers: MapState["mapMarkers"]) => void;
+  toggleMarkerVisibility: (nodeId: string) => void;
+  setMarkerVisibility: (nodeId: string, visible: boolean) => void;
   setCenter: (center: [number, number]) => void;
   setZoom: (zoom: number) => void;
   setLayers: (layers: MapLayer[]) => void;
@@ -94,13 +98,28 @@ export const useMapStore = create<MapState>((set, get) => ({
   completedGeometry: null,
   editingNodeId: null,
   fitToLayerId: null,
-  lastImport: { filename: "TN_Property_Survey.dxf", success: true },
+  lastImport: null,
   selectedMapNodeId: null,
   mapMarkers: [],
+  hiddenMarkerIds: new Set<string>(),
 
   setMapType: (mapType) => set({ mapType }),
   setSelectedMapNode: (selectedMapNodeId) => set({ selectedMapNodeId }),
   setMapMarkers: (mapMarkers) => set({ mapMarkers }),
+  toggleMarkerVisibility: (nodeId) =>
+    set((state) => {
+      const next = new Set(state.hiddenMarkerIds);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return { hiddenMarkerIds: next };
+    }),
+  setMarkerVisibility: (nodeId, visible) =>
+    set((state) => {
+      const next = new Set(state.hiddenMarkerIds);
+      if (visible) next.delete(nodeId);
+      else next.add(nodeId);
+      return { hiddenMarkerIds: next };
+    }),
   setCenter: (center) => set({ center }),
   setZoom: (zoom) => set({ zoom }),
   setLayers: (layers) => set({ layers }),

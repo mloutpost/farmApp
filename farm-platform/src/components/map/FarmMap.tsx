@@ -104,6 +104,7 @@ function MapWithLayers() {
   const setMap = useSetMap();
   const mapType = useMapStore((s) => s.mapType);
   const mapMarkers = useMapStore((s) => s.mapMarkers);
+  const hiddenMarkerIds = useMapStore((s) => s.hiddenMarkerIds);
   const editingNodeId = useMapStore((s) => s.editingNodeId);
   const setEditingNodeId = useMapStore((s) => s.setEditingNodeId);
   const currentDrawMode = useMapStore((s) => s.drawMode);
@@ -182,7 +183,7 @@ function MapWithLayers() {
       {mapReady && <DrawingOverlay />}
       {mapReady && <PolygonEditor />}
       {mapMarkers
-        .filter((m) => m.id !== editingNodeId)
+        .filter((m) => m.id !== editingNodeId && !hiddenMarkerIds.has(m.id))
         .map((m) => (
           <Marker
             key={m.id}
@@ -215,11 +216,31 @@ function MapLoader({ apiKey }: { apiKey: string }) {
   });
 
   if (loadError) {
+    const msg = loadError.message ?? String(loadError);
+    const isReferrerError = /referrer|RefererNotAllowed|restrict/i.test(msg);
     return (
-      <div className="flex h-full w-full items-center justify-center bg-bg-elevated">
-        <div className="text-center max-w-md px-6">
+      <div className="flex h-full w-full items-center justify-center bg-bg-elevated p-6">
+        <div className="text-center max-w-md">
           <h2 className="text-lg font-semibold text-text-primary mb-2">Map failed to load</h2>
-          <p className="text-text-secondary text-sm">Check your Google Maps API key and network connection.</p>
+          <p className="text-text-secondary text-sm mb-4">{msg}</p>
+          {isReferrerError && (
+            <div className="text-left text-sm text-text-muted bg-bg-surface rounded-lg p-4 border border-border">
+              <p className="font-medium text-text-primary mb-2">Fix: Add your domain to allowed referrers</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Google Cloud Console → Credentials</a></li>
+                <li>Click your Maps API key</li>
+                <li>Under &quot;Application restrictions&quot; → HTTP referrers, add your domain:
+                  <code className="block mt-2 p-2 bg-bg rounded text-xs break-all">
+                    {typeof window !== "undefined" ? `${window.location.origin}/*` : "https://your-domain.web.app/*"}
+                  </code>
+                </li>
+                <li>Save (changes apply in a few minutes)</li>
+              </ol>
+            </div>
+          )}
+          {!isReferrerError && (
+            <p className="text-text-muted text-sm">Check API key, enable Maps JavaScript API, and network.</p>
+          )}
         </div>
       </div>
     );
@@ -268,9 +289,12 @@ export default function FarmMap() {
             </svg>
           </div>
           <h2 className="text-xl font-semibold text-text-primary mb-2">Google Maps API Key Required</h2>
-          <p className="text-text-secondary text-sm leading-relaxed">
+          <p className="text-text-secondary text-sm leading-relaxed mb-2">
             Add your key to <code className="rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-accent">.env.local</code> as{" "}
             <code className="rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-accent">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>
+          </p>
+          <p className="text-text-muted text-xs">
+            For production: add <code className="rounded bg-bg-surface px-1 py-0.5 font-mono text-accent">googleMapsApiKey</code> to Firestore <code className="rounded bg-bg-surface px-1 py-0.5 font-mono text-accent">app_settings/main</code>
           </p>
         </div>
       </div>

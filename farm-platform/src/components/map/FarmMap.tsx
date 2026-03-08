@@ -290,12 +290,12 @@ export default function FarmMap() {
             </svg>
           </div>
           <h2 className="text-xl font-semibold text-text-primary mb-2">Google Maps API Key Required</h2>
-          <p className="text-text-secondary text-sm leading-relaxed mb-2">
-            Add your key to <code className="rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-accent">.env.local</code> as{" "}
-            <code className="rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-accent">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>
+          <p className="text-text-secondary text-sm leading-relaxed">
+            Add <code className="rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-accent">googleMapsApiKey</code> to Firestore{" "}
+            <code className="rounded bg-bg-surface px-1.5 py-0.5 font-mono text-xs text-accent">app_settings/main</code>
           </p>
-          <p className="text-text-muted text-xs">
-            For production: add <code className="rounded bg-bg-surface px-1 py-0.5 font-mono text-accent">googleMapsApiKey</code> to Firestore <code className="rounded bg-bg-surface px-1 py-0.5 font-mono text-accent">app_settings/main</code>
+          <p className="text-text-muted text-xs mt-2">
+            Local dev: <code className="rounded bg-bg-surface px-1 py-0.5 font-mono text-accent">.env.local</code> with <code className="rounded bg-bg-surface px-1 py-0.5 font-mono text-accent">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>
           </p>
         </div>
       </div>

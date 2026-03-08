@@ -399,6 +399,7 @@ export function IconRainwater({ size = 14 }: { size?: number }) {
 
 const KIND_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   garden: IconGarden,
+  bed: IconBed,
   field: IconField,
   pasture: IconPasture,
   orchard: IconOrchard,

@@ -62,6 +62,7 @@ interface NodeGroup {
   color: string;
   category: "area" | "point" | "line";
   nodes: FarmNode[];
+  childNodes: FarmNode[];
 }
 
 function GroupRow({
@@ -83,8 +84,11 @@ function GroupRow({
   const [mergeResult, setMergeResult] = useState<string | null>(null);
   const mergeLineNodes = useFarmStore((s) => s.mergeLineNodes);
 
-  const allVisible = group.nodes.every((n) => {
-    if (group.category === "point") return markerVisibility[n.id] !== false;
+  const allNodes = [...group.nodes, ...group.childNodes];
+
+  const allVisible = allNodes.every((n) => {
+    const cat = kindGeometryCategory(n.kind);
+    if (cat === "point") return markerVisibility[n.id] !== false;
     return layerVisibility[`node-${n.id}`] !== false;
   });
 
@@ -121,7 +125,7 @@ function GroupRow({
         <span className="text-xs font-medium text-text-primary truncate flex-1 min-w-0">
           {group.label}
         </span>
-        <span className="text-[10px] text-text-muted tabular-nums shrink-0">{group.nodes.length}</span>
+        <span className="text-[10px] text-text-muted tabular-nums shrink-0">{allNodes.length}</span>
         <button
           type="button"
           role="switch"
@@ -154,22 +158,63 @@ function GroupRow({
             const visible = isPoint
               ? markerVisibility[node.id] !== false
               : layerVisibility[`node-${node.id}`] !== false;
+            const nodeChildren = group.childNodes.filter((c) => c.parentId === node.id);
 
             return (
-              <div key={node.id} className="flex items-center justify-between gap-2 py-0.5">
-                <span className="text-xs text-text-secondary truncate min-w-0 flex-1">{node.name}</span>
+              <div key={node.id}>
+                <div className="flex items-center justify-between gap-2 py-0.5">
+                  <span className="text-xs text-text-secondary truncate min-w-0 flex-1">{node.name}</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={visible}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isPoint) toggleMarkerVisibility(node.id);
+                      else toggleLayerVisibility(`node-${node.id}`);
+                    }}
+                    className={`relative inline-flex w-9 h-5 rounded-full transition-colors shrink-0 ${visible ? "bg-accent/70" : "bg-border"}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${visible ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                </div>
+                {nodeChildren.length > 0 && (
+                  <div className="pl-4 space-y-0.5">
+                    {nodeChildren.map((child) => {
+                      const childVisible = layerVisibility[`node-${child.id}`] !== false;
+                      return (
+                        <div key={child.id} className="flex items-center justify-between gap-2 py-0.5">
+                          <span className="text-[11px] text-text-muted truncate min-w-0 flex-1">{child.name}</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={childVisible}
+                            onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(`node-${child.id}`); }}
+                            className={`relative inline-flex w-7 h-4 rounded-full transition-colors shrink-0 ${childVisible ? "bg-accent/60" : "bg-border"}`}
+                          >
+                            <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-200 ${childVisible ? "translate-x-3" : "translate-x-0"}`} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {group.childNodes.filter((c) => !group.nodes.some((n) => n.id === c.parentId)).map((orphan) => {
+            const childVisible = layerVisibility[`node-${orphan.id}`] !== false;
+            return (
+              <div key={orphan.id} className="flex items-center justify-between gap-2 py-0.5">
+                <span className="text-xs text-text-secondary truncate min-w-0 flex-1">{orphan.name}</span>
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={visible}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (isPoint) toggleMarkerVisibility(node.id);
-                    else toggleLayerVisibility(`node-${node.id}`);
-                  }}
-                  className={`relative inline-flex w-9 h-5 rounded-full transition-colors shrink-0 ${visible ? "bg-accent/70" : "bg-border"}`}
+                  aria-checked={childVisible}
+                  onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(`node-${orphan.id}`); }}
+                  className={`relative inline-flex w-9 h-5 rounded-full transition-colors shrink-0 ${childVisible ? "bg-accent/70" : "bg-border"}`}
                 >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${visible ? "translate-x-4" : "translate-x-0"}`} />
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${childVisible ? "translate-x-4" : "translate-x-0"}`} />
                 </button>
               </div>
             );
@@ -218,9 +263,21 @@ export default function MapActionsPanel() {
   }, [layers]);
 
   const groups = useMemo<NodeGroup[]>(() => {
+    const parentIds = new Set(farmNodes.filter((n) => n.parentId).map((n) => n.parentId!));
+    const childrenByParentKind = new Map<NodeKind, FarmNode[]>();
     const map = new Map<NodeKind, FarmNode[]>();
+
     farmNodes.forEach((n) => {
       if (!n.geometry) return;
+      if (n.parentId) {
+        const parent = farmNodes.find((p) => p.id === n.parentId);
+        if (parent) {
+          let list = childrenByParentKind.get(parent.kind);
+          if (!list) { list = []; childrenByParentKind.set(parent.kind, list); }
+          list.push(n);
+          return;
+        }
+      }
       let list = map.get(n.kind);
       if (!list) { list = []; map.set(n.kind, list); }
       list.push(n);
@@ -235,6 +292,7 @@ export default function MapActionsPanel() {
         color: NODE_KIND_COLORS[kind],
         category: kindGeometryCategory(kind),
         nodes: nodes.sort((a, b) => a.name.localeCompare(b.name)),
+        childNodes: (childrenByParentKind.get(kind) ?? []).sort((a, b) => a.name.localeCompare(b.name)),
       });
     });
     result.sort((a, b) => {
@@ -254,8 +312,10 @@ export default function MapActionsPanel() {
   }, [farmNodes, hiddenMarkerIds]);
 
   const toggleGroupVisibility = (group: NodeGroup, allCurrentlyVisible: boolean) => {
-    group.nodes.forEach((n) => {
-      if (group.category === "point") {
+    const allNodes = [...group.nodes, ...group.childNodes];
+    allNodes.forEach((n) => {
+      const cat = kindGeometryCategory(n.kind);
+      if (cat === "point") {
         setMarkerVisibility(n.id, !allCurrentlyVisible);
       } else {
         const layerId = `node-${n.id}`;
@@ -282,7 +342,7 @@ export default function MapActionsPanel() {
         </div>
         <button
           type="button"
-          onClick={() => router.push(`/node/${editingNodeId}`)}
+          onClick={() => router.push(`/node?id=${editingNodeId}`)}
           className="rounded-md bg-bg-elevated/95 backdrop-blur border border-border px-3 py-2 text-xs font-medium text-accent hover:bg-accent/10 shadow-lg transition-colors"
         >
           Open Details

@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# CI service account (never commit)
+firebase-sa.json
+
 # vercel
 .vercel
 

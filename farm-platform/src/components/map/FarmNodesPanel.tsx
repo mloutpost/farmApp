@@ -142,7 +142,7 @@ function NodeRow({ node, groups, indent }: { node: FarmNode; groups: FarmGroup[]
       </span>
 
       <button
-        onClick={() => router.push(`/node/${node.id}`)}
+        onClick={() => router.push(`/node?id=${node.id}`)}
         className="shrink-0 opacity-0 group-hover:opacity-100 rounded p-0.5 text-text-muted hover:text-text-primary transition-all"
         title="Open detail page"
       >

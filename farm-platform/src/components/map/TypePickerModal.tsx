@@ -42,12 +42,14 @@ interface GeoStats {
 
 export default function TypePickerModal() {
   const router = useRouter();
-  const { completedGeometry, setCompletedGeometry } = useMapStore();
+  const { completedGeometry, setCompletedGeometry, pendingParentId, setPendingParentId } = useMapStore();
   const addNode = useFarmStore((s) => s.addNode);
   const updateNodeData = useFarmStore((s) => s.updateNodeData);
   const profile = useFarmStore((s) => s.profile);
-  const [kind, setKind] = useState<NodeKind | "">("");
+  const gardens = useFarmStore((s) => s.nodes.filter((n) => n.kind === "garden"));
+  const [kind, setKind] = useState<NodeKind | "">(pendingParentId ? "bed" : "");
   const [name, setName] = useState("");
+  const [parentId, setParentId] = useState<string>(pendingParentId ?? "");
 
   const geometryType = useMemo(() => {
     if (!completedGeometry || !("type" in completedGeometry)) return null;
@@ -88,7 +90,8 @@ export default function TypePickerModal() {
   const handleCreate = () => {
     if (!kind || !completedGeometry) return;
     const displayName = name.trim() || `${NODE_KIND_LABELS[kind]} ${Date.now().toString().slice(-4)}`;
-    const id = addNode(kind, displayName, completedGeometry);
+    const resolvedParentId = kind === "bed" && parentId ? parentId : undefined;
+    const id = addNode(kind, displayName, completedGeometry, undefined, resolvedParentId);
 
     if (kind === "garden" && stats.areaSqFt) {
       updateNodeData(id, {
@@ -123,6 +126,9 @@ export default function TypePickerModal() {
     if (kind === "building" && stats.areaSqFt) {
       updateNodeData(id, { sqft: Math.round(stats.areaSqFt) } as any);
     }
+    if (kind === "bed" && stats.areaSqFt) {
+      updateNodeData(id, { sqft: Math.round(stats.areaSqFt), sunExposure: stats.estimatedSun } as any);
+    }
     if (kind === "irrigation" && stats.lengthFt) {
       updateNodeData(id, { lengthFt: Math.round(stats.lengthFt) } as Partial<IrrigationData>);
     }
@@ -143,15 +149,19 @@ export default function TypePickerModal() {
     }
 
     setCompletedGeometry(null);
+    setPendingParentId(null);
     setKind("");
     setName("");
-    router.push(`/node/${id}`);
+    setParentId("");
+    router.push(`/node?id=${id}`);
   };
 
   const handleCancel = () => {
     setCompletedGeometry(null);
+    setPendingParentId(null);
     setKind("");
     setName("");
+    setParentId("");
   };
 
   return (
@@ -221,7 +231,7 @@ export default function TypePickerModal() {
           ))}
         </div>
 
-        <div className="mb-6">
+        <div className="mb-4">
           <label className="block text-sm font-medium text-text-secondary mb-1.5">
             Name
           </label>
@@ -234,6 +244,25 @@ export default function TypePickerModal() {
             autoFocus
           />
         </div>
+
+        {kind === "bed" && gardens.length > 0 && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">
+              Parent Garden
+            </label>
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent/50 focus:outline-none transition-colors"
+            >
+              <option value="">None (standalone bed)</option>
+              {gardens.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-text-muted mt-1">Link this bed to a garden to see it on that garden's detail page.</p>
+          </div>
+        )}
 
         <div className="flex justify-end gap-2">
           <button

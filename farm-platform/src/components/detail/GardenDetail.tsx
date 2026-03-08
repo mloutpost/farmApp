@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useFarmStore } from "@/store/farm-store";
+import { useMapStore } from "@/store/map-store";
 import FrostPlanting from "./FrostPlanting";
 import CropPicker, { CropInfoCard } from "./CropPicker";
 import { polygonSideLengths, polygonPerimeterFt, formatFt, formatArea } from "@/lib/geo-calc";
 import type { CropEntry } from "@/lib/crop-catalog";
-import type { FarmNode, GardenData, Bed, Planting } from "@/types";
+import type { FarmNode, GardenData, BedNodeData, Bed, Planting } from "@/types";
+import { NODE_KIND_COLORS } from "@/types";
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -167,7 +170,9 @@ function BedSection({ bed, nodeId }: { bed: Bed; nodeId: string }) {
 }
 
 export default function GardenDetail({ node }: { node: FarmNode }) {
+  const router = useRouter();
   const updateNodeData = useFarmStore((s) => s.updateNodeData);
+  const childBeds = useFarmStore((s) => s.nodes.filter((n) => n.parentId === node.id && n.kind === "bed"));
   const data = node.data as GardenData;
 
   const geoInfo = useMemo(() => {
@@ -273,9 +278,70 @@ export default function GardenDetail({ node }: { node: FarmNode }) {
         />
       </div>
 
+      {childBeds.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-text-primary">Beds on Map</h3>
+            <button
+              onClick={() => {
+                useMapStore.getState().setDrawMode("polygon");
+                useMapStore.getState().setPendingParentId(node.id);
+                router.push("/");
+              }}
+              className="text-xs font-medium text-accent hover:text-accent-hover transition-colors"
+            >
+              + Draw Bed
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {childBeds.map((bed) => {
+              const bedData = bed.data as BedNodeData;
+              const plantingCount = bedData.plantings?.length ?? 0;
+              return (
+                <button
+                  key={bed.id}
+                  onClick={() => router.push(`/node?id=${bed.id}`)}
+                  className="flex w-full items-center gap-3 rounded-lg border border-border bg-bg-surface p-3 text-left hover:bg-bg-surface/80 transition-colors"
+                >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: NODE_KIND_COLORS.bed }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-text-primary truncate">{bed.name}</div>
+                    <div className="text-xs text-text-muted">
+                      {bedData.sqft ? `${bedData.sqft} sq ft` : ""}
+                      {bedData.sqft && plantingCount > 0 ? " -- " : ""}
+                      {plantingCount > 0 ? `${plantingCount} planting${plantingCount > 1 ? "s" : ""}` : ""}
+                      {!bedData.sqft && plantingCount === 0 ? "No data yet" : ""}
+                    </div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted shrink-0">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {childBeds.length === 0 && (
+        <div className="rounded-lg border border-dashed border-border p-4 text-center">
+          <p className="text-sm text-text-secondary mb-2">Draw beds on the map for this garden</p>
+          <button
+            onClick={() => {
+              useMapStore.getState().setDrawMode("polygon");
+              useMapStore.getState().setPendingParentId(node.id);
+              router.push("/");
+            }}
+            className="text-xs font-medium text-accent hover:text-accent-hover transition-colors"
+          >
+            + Draw Bed on Map
+          </button>
+        </div>
+      )}
+
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-text-primary">Beds</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Quick Beds (no geometry)</h3>
           <button onClick={addBed} className="text-xs font-medium text-accent hover:text-accent-hover transition-colors">
             + Add Bed
           </button>
@@ -286,7 +352,7 @@ export default function GardenDetail({ node }: { node: FarmNode }) {
           ))}
         </div>
         {data.beds.length === 0 && (
-          <p className="text-xs text-text-muted">No beds yet. Add beds to organize your plantings.</p>
+          <p className="text-xs text-text-muted">Quick beds don't show on the map. Use "Draw Bed on Map" above to create beds with boundaries.</p>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useParams } from "next/navigation";
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useFarmStore } from "@/store/farm-store";
 import { NODE_KIND_LABELS, NODE_KIND_COLORS, AREA_KINDS, POINT_KINDS, LINE_KINDS } from "@/types";
 import type { NodeKind } from "@/types";
@@ -9,6 +10,7 @@ import HarvestLog from "@/components/detail/HarvestLog";
 import PhotoGallery from "@/components/detail/PhotoGallery";
 import ConnectionsEditor from "@/components/detail/ConnectionsEditor";
 import GardenDetail from "@/components/detail/GardenDetail";
+import BedDetail from "@/components/detail/BedDetail";
 import FieldDetail from "@/components/detail/FieldDetail";
 import PastureDetail from "@/components/detail/PastureDetail";
 import OrchardDetail from "@/components/detail/OrchardDetail";
@@ -42,6 +44,7 @@ import { useState } from "react";
 
 const DETAIL_COMPONENTS: Record<NodeKind, React.ComponentType<{ node: any }>> = {
   garden: GardenDetail,
+  bed: BedDetail,
   field: FieldDetail,
   pasture: PastureDetail,
   orchard: OrchardDetail,
@@ -77,8 +80,8 @@ function ExportCSV({ node }: { node: any }) {
   const handleExport = () => {
     const rows: string[][] = [];
     rows.push(["Type", "Date", "Detail", "Notes"]);
-    node.activityLog.forEach((a: any) => rows.push(["activity", a.date, a.action, a.notes ?? ""]));
-    node.harvestLog.forEach((h: any) => rows.push(["harvest", h.date, `${h.crop} ${h.amount} ${h.unit}`, h.notes ?? ""]));
+    (node.activityLog ?? []).forEach((a: any) => rows.push(["activity", a.date, a.action, a.notes ?? ""]));
+    (node.harvestLog ?? []).forEach((h: any) => rows.push(["harvest", h.date, `${h.crop} ${h.amount} ${h.unit}`, h.notes ?? ""]));
     const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -99,16 +102,29 @@ function ExportCSV({ node }: { node: any }) {
   );
 }
 
-export default function NodeDetailPage() {
-  const params = useParams();
+function NodeDetailContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const nodeId = params.id as string;
+  const nodeId = searchParams.get("id") ?? "";
   const node = useFarmStore((s) => s.nodes.find((n) => n.id === nodeId));
   const updateNode = useFarmStore((s) => s.updateNode);
   const changeNodeKind = useFarmStore((s) => s.changeNodeKind);
   const removeNode = useFarmStore((s) => s.removeNode);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showKindPicker, setShowKindPicker] = useState(false);
+
+  if (!nodeId) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-lg font-semibold text-text-primary mb-2">Select a node</h2>
+          <button onClick={() => router.push("/")} className="text-sm text-accent hover:text-accent-hover">
+            Back to map
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!node) {
     return (
@@ -124,7 +140,7 @@ export default function NodeDetailPage() {
   }
 
   const DetailComponent = DETAIL_COMPONENTS[node.kind];
-  const HARVESTABLE: string[] = ["garden", "field", "pasture", "orchard", "pond", "greenhouse", "vineyard", "woodlot", "beehive", "coop"];
+  const HARVESTABLE: string[] = ["garden", "bed", "field", "pasture", "orchard", "pond", "greenhouse", "vineyard", "woodlot", "beehive", "coop"];
   const showHarvest = HARVESTABLE.includes(node.kind);
 
   const geoType = node.geometry && "type" in node.geometry ? (node.geometry as { type: string }).type : null;
@@ -250,5 +266,13 @@ export default function NodeDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NodeDetailPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center text-text-muted">Loading...</div>}>
+      <NodeDetailContent />
+    </Suspense>
   );
 }

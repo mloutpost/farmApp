@@ -2,17 +2,18 @@ import type { GeoJSON } from "geojson";
 
 /* ── Node kinds by geometry ── */
 
-export type AreaKind = "garden" | "field" | "pasture" | "orchard" | "pond" | "greenhouse" | "vineyard" | "woodlot" | "corral" | "building";
+export type AreaKind = "garden" | "bed" | "field" | "pasture" | "orchard" | "pond" | "greenhouse" | "vineyard" | "woodlot" | "corral" | "building";
 export type PointKind = "well" | "pump" | "barn" | "compost" | "spring" | "shop" | "silo" | "beehive" | "gate" | "coop" | "cellar" | "smokehouse" | "rainwater";
 export type LineKind = "irrigation" | "fence" | "stream" | "road" | "pipeline" | "ditch" | "powerline";
 export type NodeKind = AreaKind | PointKind | LineKind;
 
-export const AREA_KINDS: AreaKind[] = ["garden", "field", "pasture", "orchard", "pond", "greenhouse", "vineyard", "woodlot", "corral", "building"];
+export const AREA_KINDS: AreaKind[] = ["garden", "bed", "field", "pasture", "orchard", "pond", "greenhouse", "vineyard", "woodlot", "corral", "building"];
 export const POINT_KINDS: PointKind[] = ["well", "pump", "barn", "compost", "spring", "shop", "silo", "beehive", "gate", "coop", "cellar", "smokehouse", "rainwater"];
 export const LINE_KINDS: LineKind[] = ["irrigation", "fence", "stream", "road", "pipeline", "ditch", "powerline"];
 
 export const NODE_KIND_LABELS: Record<NodeKind, string> = {
   garden: "Garden",
+  bed: "Garden Bed",
   field: "Field",
   pasture: "Pasture",
   orchard: "Orchard",
@@ -46,6 +47,7 @@ export const NODE_KIND_LABELS: Record<NodeKind, string> = {
 
 export const NODE_KIND_COLORS: Record<NodeKind, string> = {
   garden: "#22c55e",
+  bed: "#16a34a",
   field: "#84cc16",
   pasture: "#a3e635",
   orchard: "#4ade80",
@@ -185,6 +187,21 @@ export interface GardenData {
   amendments: SoilAmendment[];
   irrigationSourceId?: string;
   wateringSchedule?: string;
+  seasonNotes?: string;
+}
+
+export interface BedNodeData {
+  kind: "bed";
+  sqft?: number;
+  bedType?: "raised" | "in-ground" | "container" | "hugel" | "keyhole";
+  soilType?: string;
+  sunExposure?: "full" | "partial" | "shade";
+  widthFt?: number;
+  lengthFt?: number;
+  depthIn?: number;
+  irrigationType?: "drip" | "soaker" | "sprinkler" | "hand" | "none";
+  mulchType?: string;
+  plantings: Planting[];
   seasonNotes?: string;
 }
 
@@ -531,6 +548,7 @@ export interface RainwaterData {
 
 export type NodeData =
   | GardenData
+  | BedNodeData
   | FieldData
   | PastureData
   | OrchardData
@@ -576,6 +594,7 @@ export interface FarmNode {
   name: string;
   color?: string;
   groupId?: string;
+  parentId?: string;
   geometry: GeoJSON;
   connections: string[];
   data: NodeData;

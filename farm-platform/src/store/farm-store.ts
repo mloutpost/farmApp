@@ -38,6 +38,8 @@ function emptyData(kind: NodeKind): NodeData {
   switch (kind) {
     case "garden":
       return { kind: "garden", beds: [], amendments: [] };
+    case "bed":
+      return { kind: "bed", plantings: [] };
     case "field":
       return { kind: "field", soilTests: [], rotationHistory: [] };
     case "pasture":
@@ -105,7 +107,7 @@ interface FarmStore {
   profile: FarmProfile;
   selectedId: string | null;
 
-  addNode: (kind: NodeKind, name: string, geometry: GeoJSON, groupId?: string) => string;
+  addNode: (kind: NodeKind, name: string, geometry: GeoJSON, groupId?: string, parentId?: string) => string;
   addGroup: (name: string, color?: string) => string;
   updateGroup: (id: string, updates: Partial<FarmGroup>) => void;
   removeGroup: (id: string) => void;
@@ -139,7 +141,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
   profile: { name: "My Farm", currentSeason: new Date().getFullYear() },
   selectedId: null,
 
-  addNode: (kind, name, geometry, groupId) => {
+  addNode: (kind, name, geometry, groupId, parentId) => {
     const id = uid();
     const ts = now();
     const node: FarmNode = {
@@ -147,6 +149,7 @@ export const useFarmStore = create<FarmStore>((set, get) => ({
       kind,
       name,
       groupId,
+      parentId,
       geometry,
       connections: [],
       data: emptyData(kind),

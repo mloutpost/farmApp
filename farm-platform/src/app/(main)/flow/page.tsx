@@ -74,7 +74,7 @@ export default function FlowPage() {
   }, [flowNodes, flowEdges]);
 
   const onNodeClick: NodeMouseHandler = useCallback(
-    (_, node) => router.push(`/node/${node.id}`),
+    (_, node) => router.push(`/node?id=${node.id}`),
     [router]
   );
 

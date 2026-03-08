@@ -73,7 +73,7 @@ export default function SearchPalette() {
   const handleSelect = useCallback((id: string) => {
     setOpen(false);
     setQuery("");
-    router.push(`/node/${id}`);
+    router.push(`/node?id=${id}`);
   }, [router]);
 
   if (!open) return null;

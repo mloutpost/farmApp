@@ -35,7 +35,7 @@ export default function DrawToolbar() {
           </span>
         </div>
         <button
-          onClick={() => router.push(`/node/${editingNodeId}`)}
+          onClick={() => router.push(`/node?id=${editingNodeId}`)}
           className="rounded-md bg-bg-elevated/95 backdrop-blur border border-border px-3 py-2 text-xs font-medium text-accent hover:bg-accent/10 shadow-lg transition-colors"
         >
           Open Details

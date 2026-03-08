@@ -137,7 +137,7 @@ export default function TimelinePage() {
                 <div
                   key={entry.planting.id}
                   className="grid grid-cols-[200px_1fr] border-b border-border/50 hover:bg-bg-surface/50 cursor-pointer"
-                  onClick={() => router.push(`/node/${entry.nodeId}`)}
+                  onClick={() => router.push(`/node?id=${entry.nodeId}`)}
                 >
                   <div className="px-3 py-2.5 min-w-0">
                     <div className="text-xs font-medium text-text-primary truncate">{entry.planting.crop || "Unnamed"}</div>

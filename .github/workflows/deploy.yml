@@ -1,0 +1,55 @@
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Firebase secret
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret is not set. Add it in repo Settings → Secrets → Actions."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: farm-platform/package-lock.json
+
+      - name: Install dependencies
+        working-directory: farm-platform
+        run: npm ci
+
+      - name: Build
+        working-directory: farm-platform
+        run: npm run build
+
+      - name: Verify build output
+        working-directory: farm-platform
+        run: |
+          if [ ! -d "out" ] || [ -z "$(ls -A out 2>/dev/null)" ]; then
+            echo "::error::Build did not produce out/ folder. Ensure next.config has output: 'export'."
+            exit 1
+          fi
+
+      - name: Deploy to Firebase Hosting
+        working-directory: farm-platform
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/farm-platform/firebase-sa.json
+          FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SA_JSON" > firebase-sa.json
+          npx firebase-tools deploy --only hosting --non-interactive
+          rm -f firebase-sa.json

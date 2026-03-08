@@ -9,7 +9,7 @@ import type { MapLayer } from "@/types";
 function fingerprint(): string {
   const { nodes, groups } = useFarmStore.getState();
   const gfp = groups.map((g) => `${g.id}:${g.color ?? ""}`).join(";");
-  return nodes.map((n) => `${n.id}:${n.name}:${n.color ?? ""}:${n.groupId ?? ""}:${n.kind}`).join("|") + "||" + gfp;
+  return nodes.map((n) => `${n.id}:${n.name}:${n.color ?? ""}:${n.groupId ?? ""}:${n.parentId ?? ""}:${n.kind}`).join("|") + "||" + gfp;
 }
 
 function rebuildMapLayers() {

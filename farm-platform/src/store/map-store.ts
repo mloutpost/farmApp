@@ -21,6 +21,8 @@ interface MapState {
   pendingGeometry: PendingGeometry | null;
   /** Completed geometry awaiting node type assignment (opens CreateNodeModal) */
   completedGeometry: GeoJSON | null;
+  /** When "fence-planner", completed geometry goes to Fence Planner instead of TypePickerModal. When "elevation-profile", goes to Elevation Profile panel. */
+  completedGeometryFor: "node" | "fence-planner" | "elevation-profile" | null;
   /** Node ID currently being edited on the map */
   editingNodeId: string | null;
   /** When set, map will fit to this layer's bounds after adding */
@@ -57,6 +59,7 @@ interface MapState {
   setLastImport: (info: { filename: string; success: boolean } | null) => void;
   setPendingGeometry: (g: PendingGeometry | null) => void;
   setCompletedGeometry: (g: GeoJSON | null) => void;
+  setCompletedGeometryFor: (dest: "node" | "fence-planner" | "elevation-profile" | null) => void;
   setEditingNodeId: (id: string | null) => void;
   setPendingParentId: (id: string | null) => void;
   setMapViewInitialized: () => void;
@@ -105,6 +108,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   drawMode: "none",
   pendingGeometry: null,
   completedGeometry: null,
+  completedGeometryFor: null,
   editingNodeId: null,
   fitToLayerId: null,
   fitToFarmBounds: false,
@@ -159,6 +163,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   setLastImport: (lastImport) => set({ lastImport }),
   setPendingGeometry: (pendingGeometry) => set({ pendingGeometry }),
   setCompletedGeometry: (completedGeometry) => set({ completedGeometry }),
+  setCompletedGeometryFor: (completedGeometryFor) => set({ completedGeometryFor }),
   setEditingNodeId: (editingNodeId) =>
     set({
       editingNodeId,

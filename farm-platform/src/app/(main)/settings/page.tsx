@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase";
 import { useFarmStore } from "@/store/farm-store";
 import { useAuth } from "@/hooks/useAuth";
 import SurveyImport from "@/components/settings/SurveyImport";
+import DemImport from "@/components/map/DemImport";
 import GeoJsonNodeImport from "@/components/settings/GeoJsonNodeImport";
 import AddressSearch from "@/components/settings/AddressSearch";
 import { toFirestoreDocument, fromFirestoreDocument } from "@/lib/farm-serialize";
@@ -206,6 +207,12 @@ export default function SettingsPage() {
             <h2 className="text-base font-medium text-text-primary mb-1">Survey Overlay Import</h2>
             <p className="text-sm text-text-muted mb-6">Import DXF or GeoJSON as a visual map layer (not editable nodes).</p>
             <SurveyImport />
+          </section>
+
+          <section className="rounded-xl border border-border bg-bg-elevated p-6">
+            <h2 className="text-base font-medium text-text-primary mb-1">Terrain (DEM) Import</h2>
+            <p className="text-sm text-text-muted mb-6">Import a GeoTIFF DEM for elevation data and terrain visualization. Export from QGIS in WGS84.</p>
+            <DemImport />
           </section>
 
           <section className="rounded-xl border border-border bg-bg-elevated p-6">

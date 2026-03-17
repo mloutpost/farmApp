@@ -42,7 +42,7 @@ interface GeoStats {
 
 export default function TypePickerModal() {
   const router = useRouter();
-  const { completedGeometry, setCompletedGeometry, pendingParentId, setPendingParentId } = useMapStore();
+  const { completedGeometry, setCompletedGeometry, pendingParentId, setPendingParentId, completedGeometryFor } = useMapStore();
   const addNode = useFarmStore((s) => s.addNode);
   const updateNodeData = useFarmStore((s) => s.updateNodeData);
   const profile = useFarmStore((s) => s.profile);
@@ -87,7 +87,7 @@ export default function TypePickerModal() {
     return {};
   }, [completedGeometry]);
 
-  if (!completedGeometry || !geometryType) return null;
+  if (!completedGeometry || !geometryType || completedGeometryFor === "fence-planner" || completedGeometryFor === "elevation-profile") return null;
 
   const handleCreate = () => {
     if (!kind || !completedGeometry) return;

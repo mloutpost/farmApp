@@ -11,6 +11,14 @@ import { MapProvider, useSetMap } from "@/contexts/MapContext";
 import { MapDrawingHandler } from "./MapDrawingHandler";
 import DrawingOverlay from "./DrawingOverlay";
 import PolygonEditor from "./PolygonEditor";
+import HillshadeOverlay from "./HillshadeOverlay";
+import SlopeOverlay from "./SlopeOverlay";
+import AspectOverlay from "./AspectOverlay";
+import DrainageOverlay from "./DrainageOverlay";
+import FrostPocketsOverlay from "./FrostPocketsOverlay";
+import ContoursOverlay from "./ContoursOverlay";
+import ElevationProfileOverlay from "./ElevationProfileOverlay";
+import FencePlannerOverlay from "@/components/fence/FencePlannerOverlay";
 import { NODE_KIND_COLORS } from "@/types";
 import type { FeatureCollection } from "geojson";
 
@@ -234,6 +242,14 @@ function MapWithLayers() {
       }}
     >
       {mapReady && <MapLayers map={mapRef.current} />}
+      {mapReady && <HillshadeOverlay />}
+      {mapReady && <SlopeOverlay />}
+      {mapReady && <AspectOverlay />}
+      {mapReady && <DrainageOverlay />}
+      {mapReady && <FrostPocketsOverlay />}
+      {mapReady && <ContoursOverlay />}
+      {mapReady && <ElevationProfileOverlay />}
+      {mapReady && <FencePlannerOverlay />}
       {mapReady && <MapDrawingHandler />}
       {mapReady && <DrawingOverlay />}
       {mapReady && <PolygonEditor />}

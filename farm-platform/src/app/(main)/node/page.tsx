@@ -41,6 +41,7 @@ import SmokehouseDetail from "@/components/detail/SmokehouseDetail";
 import RainwaterDetail from "@/components/detail/RainwaterDetail";
 import HydrantDetail from "@/components/detail/HydrantDetail";
 import BuildingDetail from "@/components/detail/BuildingDetail";
+import NodeElevationBadge from "@/components/detail/NodeElevationBadge";
 import { useState } from "react";
 
 const DETAIL_COMPONENTS: Record<NodeKind, React.ComponentType<{ node: any }>> = {
@@ -217,8 +218,11 @@ function NodeDetailContent() {
           </div>
         </div>
 
-        <div className="text-xs text-text-muted mb-8">
-          Last updated: {new Date(node.updatedAt).toLocaleDateString()}
+        <div className="flex flex-wrap items-center gap-2 mb-8">
+          <span className="text-xs text-text-muted">
+            Last updated: {new Date(node.updatedAt).toLocaleDateString()}
+          </span>
+          <NodeElevationBadge node={node} />
         </div>
 
         <div className="space-y-8">

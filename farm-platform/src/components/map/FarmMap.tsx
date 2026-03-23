@@ -9,6 +9,7 @@ import { getGeoJsonBounds } from "@/lib/coordinate-transform";
 import { useGoogleMapsApiKey } from "@/hooks/useGoogleMapsApiKey";
 import { MapProvider, useSetMap } from "@/contexts/MapContext";
 import { MapDrawingHandler } from "./MapDrawingHandler";
+import DrawingClickOverlay from "./DrawingClickOverlay";
 import DrawingOverlay from "./DrawingOverlay";
 import PolygonEditor from "./PolygonEditor";
 import HillshadeOverlay from "./HillshadeOverlay";
@@ -251,6 +252,7 @@ function MapWithLayers() {
       {mapReady && <ElevationProfileOverlay />}
       {mapReady && <FencePlannerOverlay />}
       {mapReady && <MapDrawingHandler />}
+      {mapReady && <DrawingClickOverlay />}
       {mapReady && <DrawingOverlay />}
       {mapReady && <PolygonEditor />}
       {mapMarkers

@@ -10,6 +10,7 @@ import { useGoogleMapsApiKey } from "@/hooks/useGoogleMapsApiKey";
 import { MapProvider, useSetMap } from "@/contexts/MapContext";
 import { MapDrawingHandler } from "./MapDrawingHandler";
 import DrawingClickOverlay from "./DrawingClickOverlay";
+import CropHatchOverlay from "./CropHatchOverlay";
 import DrawingOverlay from "./DrawingOverlay";
 import PolygonEditor from "./PolygonEditor";
 import HillshadeOverlay from "./HillshadeOverlay";
@@ -106,6 +107,7 @@ function MapLayers({ map }: { map: google.maps.Map | null }) {
       const isPolygon = geom?.getType?.() === "Polygon" || geom?.getType?.() === "MultiPolygon";
       const customColor = f.getProperty?.("color") as string | undefined;
       const color = customColor || (kind ? (NODE_KIND_COLORS as Record<string, string>)[kind] ?? "#22c55e" : "#22c55e");
+      const hasCrop = f.getProperty?.("hasCrop") === true;
 
       if (nodeId && nodeId === editingNodeId) {
         return { visible: false };
@@ -113,10 +115,10 @@ function MapLayers({ map }: { map: google.maps.Map | null }) {
 
       return {
         fillColor: color,
-        fillOpacity: isPolygon ? opacity * 0.3 : 0,
+        fillOpacity: isPolygon ? opacity * (hasCrop ? 0.22 : 0.3) : 0,
         strokeColor: color,
         strokeOpacity: opacity,
-        strokeWeight: 2,
+        strokeWeight: hasCrop ? 2.5 : 2,
       };
     });
 
@@ -253,6 +255,7 @@ function MapWithLayers() {
       {mapReady && <FencePlannerOverlay />}
       {mapReady && <MapDrawingHandler />}
       {mapReady && <DrawingClickOverlay />}
+      {mapReady && <CropHatchOverlay />}
       {mapReady && <DrawingOverlay />}
       {mapReady && <PolygonEditor />}
       {mapMarkers

@@ -5,6 +5,8 @@ import { useMapStore } from "@/store/map-store";
 import { useFarmStore } from "@/store/farm-store";
 import { useMap } from "@/contexts/MapContext";
 import { nodeColor } from "@/types";
+import type { FarmNode, NodeData } from "@/types";
+import { polygonAreaDataUpdatesForKind } from "@/lib/polygon-measure-updates";
 
 export default function PolygonEditor() {
   const map = useMap();
@@ -32,7 +34,20 @@ export default function PolygonEditor() {
       }
       if (coords.length >= 3) {
         coords.push([coords[0][0], coords[0][1]]);
-        useFarmStore.getState().updateNode(id, { geometry: { type: "Polygon", coordinates: [coords] } as any });
+        const state = useFarmStore.getState();
+        const node = state.nodes.find((n) => n.id === id);
+        const geometry = { type: "Polygon", coordinates: [coords] } as FarmNode["geometry"];
+        const dataPatch =
+          node &&
+          polygonAreaDataUpdatesForKind(node.kind, coords, {
+            profileSun: state.profile.sunExposure ?? undefined,
+          });
+        state.updateNode(id, {
+          geometry,
+          ...(dataPatch && node
+            ? { data: { ...node.data, ...dataPatch } as NodeData }
+            : {}),
+        });
       }
     } else if (id && polylineRef.current) {
       const path = polylineRef.current.getPath();
@@ -91,8 +106,21 @@ export default function PolygonEditor() {
         }
         if (coords.length >= 3) {
           coords.push([coords[0][0], coords[0][1]]);
+          const state = useFarmStore.getState();
+          const node = state.nodes.find((n) => n.id === id);
+          const geometry = { type: "Polygon", coordinates: [coords] } as FarmNode["geometry"];
+          const dataPatch =
+            node &&
+            polygonAreaDataUpdatesForKind(node.kind, coords, {
+              profileSun: state.profile.sunExposure ?? undefined,
+            });
+          state.updateNode(id, {
+            geometry,
+            ...(dataPatch && node
+              ? { data: { ...node.data, ...dataPatch } as NodeData }
+              : {}),
+          });
         }
-        useFarmStore.getState().updateNode(id, { geometry: { type: "Polygon", coordinates: [coords] } as any });
       }
 
       if (polylineRef.current) {

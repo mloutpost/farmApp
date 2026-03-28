@@ -13,6 +13,14 @@ import { useFarmStore } from "@/store/farm-store";
 import { NODE_KIND_COLORS, NODE_KIND_LABELS, AREA_KINDS, POINT_KINDS, LINE_KINDS } from "@/types";
 import type { NodeKind, FarmNode } from "@/types";
 import { NodeKindIcon } from "@/components/icons/FarmIcons";
+import { formatArea } from "@/lib/geo-calc";
+
+function editingFootprintLabel(node: FarmNode): string | null {
+  const d = node.data as { sqft?: number; acreage?: number };
+  if (d.acreage != null && d.acreage > 0) return `${d.acreage.toFixed(2)} ac`;
+  if (d.sqft != null && d.sqft > 0) return formatArea(d.sqft);
+  return null;
+}
 
 const MODES = [
   { id: "polygon" as const, label: "Area", help: "Click corners to draw a polygon. Double-click to finish." },
@@ -363,11 +371,20 @@ export default function MapActionsPanel() {
 
   if (editingNodeId && editingNode) {
     const color = NODE_KIND_COLORS[editingNode.kind as keyof typeof NODE_KIND_COLORS] ?? "#22c55e";
+    const footprintEditing = editingFootprintLabel(editingNode);
     return (
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 rounded-lg bg-bg-elevated/95 backdrop-blur border border-border p-1.5 px-3 shadow-lg">
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-xs font-medium text-text-primary">Editing: {editingNode.name}</span>
+          <span className="text-xs font-medium text-text-primary">
+            Editing: {editingNode.name}
+            {footprintEditing && (
+              <span className="text-text-secondary font-normal tabular-nums">
+                {" "}
+                · {footprintEditing}
+              </span>
+            )}
+          </span>
         </div>
         <button
           type="button"

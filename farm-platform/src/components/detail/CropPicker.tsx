@@ -26,6 +26,13 @@ export default function CropPicker({ value, catalogId, categories, placeholder, 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  /** Shown when closed; also seeds search when opening (avoids empty query + Enter selecting first catalog item) */
+  const resolvedLabel = useMemo(() => {
+    if (value?.trim()) return value.trim();
+    if (catalogId) return getCropById(catalogId)?.name ?? "";
+    return "";
+  }, [value, catalogId]);
+
   const results = useMemo(() => {
     const all = searchCrops(query);
     if (!categories || categories.length === 0) return all;
@@ -73,6 +80,7 @@ export default function CropPicker({ value, catalogId, categories, placeholder, 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
       if (e.key === "ArrowDown" || e.key === "Enter") {
+        setQuery(resolvedLabel);
         setOpen(true);
         e.preventDefault();
       }
@@ -92,6 +100,11 @@ export default function CropPicker({ value, catalogId, categories, placeholder, 
         break;
       case "Enter":
         e.preventDefault();
+        // Empty query must not commit the highlighted row (was easy to trigger while tabbing / navigating).
+        if (!query.trim()) {
+          setOpen(false);
+          return;
+        }
         if (flatList[highlightIdx]) handleSelect(flatList[highlightIdx]);
         break;
       case "Escape":
@@ -113,17 +126,20 @@ export default function CropPicker({ value, catalogId, categories, placeholder, 
     <div className="relative" ref={dropdownRef}>
       <input
         ref={inputRef}
-        value={open ? query : value}
+        value={open ? query : resolvedLabel}
         onChange={(e) => {
           setQuery(e.target.value);
           if (!open) setOpen(true);
         }}
         onFocus={() => {
           setOpen(true);
-          setQuery("");
+          setQuery(resolvedLabel);
         }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder ?? "Search crops..."}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
         className="w-full bg-transparent text-xs text-text-primary placeholder:text-text-muted outline-none min-w-0"
       />
 

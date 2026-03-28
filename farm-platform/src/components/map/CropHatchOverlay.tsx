@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useMap } from "@/contexts/MapContext";
 import { useFarmStore } from "@/store/farm-store";
-import { nodeHasCropArea } from "@/lib/node-crop";
+import { nodeShowsCropHatch } from "@/lib/node-crop";
 import { nodeColor } from "@/types";
 
 function ringToPathD(
@@ -36,7 +36,7 @@ export default function CropHatchOverlay() {
 
   useEffect(() => {
     const cropNodes = nodes.filter(
-      (n) => nodeHasCropArea(n) && n.geometry && (n.geometry as { type?: string }).type === "Polygon"
+      (n) => nodeShowsCropHatch(n) && n.geometry && (n.geometry as { type?: string }).type === "Polygon"
     );
     if (!map || cropNodes.length === 0) {
       overlayRef.current?.setMap(null);

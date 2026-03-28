@@ -606,7 +606,13 @@ export interface FarmNode {
   id: string;
   kind: NodeKind;
   name: string;
+  /** Map stroke/fill; when unset, group color (if any) or kind default is used */
   color?: string;
+  /**
+   * Diagonal crop/forage hatch on the map (field, pasture, orchard polygons).
+   * `auto` (default) shows hatch when crop/forage/varieties are set; `on`/`off` force.
+   */
+  cropHatch?: "auto" | "on" | "off";
   groupId?: string;
   parentId?: string;
   geometry: GeoJSON;

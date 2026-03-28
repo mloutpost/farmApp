@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useFarmStore } from "@/store/farm-store";
-import { NODE_KIND_LABELS, NODE_KIND_COLORS, AREA_KINDS, POINT_KINDS, LINE_KINDS } from "@/types";
+import { NODE_KIND_LABELS, NODE_KIND_COLORS, AREA_KINDS, POINT_KINDS, LINE_KINDS, nodeColor } from "@/types";
 import type { NodeKind } from "@/types";
 import ActivityLog from "@/components/detail/ActivityLog";
 import HarvestLog from "@/components/detail/HarvestLog";
@@ -42,6 +42,7 @@ import RainwaterDetail from "@/components/detail/RainwaterDetail";
 import HydrantDetail from "@/components/detail/HydrantDetail";
 import BuildingDetail from "@/components/detail/BuildingDetail";
 import NodeElevationBadge from "@/components/detail/NodeElevationBadge";
+import NodeHeaderMapAppearance from "@/components/detail/NodeHeaderMapAppearance";
 import { useState } from "react";
 
 const DETAIL_COMPONENTS: Record<NodeKind, React.ComponentType<{ node: any }>> = {
@@ -110,6 +111,7 @@ function NodeDetailContent() {
   const router = useRouter();
   const nodeId = searchParams.get("id") ?? "";
   const node = useFarmStore((s) => s.nodes.find((n) => n.id === nodeId));
+  const groups = useFarmStore((s) => s.groups);
   const updateNode = useFarmStore((s) => s.updateNode);
   const changeNodeKind = useFarmStore((s) => s.changeNodeKind);
   const removeNode = useFarmStore((s) => s.removeNode);
@@ -161,7 +163,7 @@ function NodeDetailContent() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-3xl mx-auto px-6 py-8">
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3 mb-6">
           <button
             onClick={() => router.push("/")}
             className="rounded-md p-2 text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors"
@@ -171,19 +173,23 @@ function NodeDetailContent() {
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>
-          <div className="flex-1">
+          <div className="flex-1 min-w-[12rem]">
             <input
               value={node.name}
               onChange={(e) => updateNode(node.id, { name: e.target.value })}
               className="text-xl font-bold bg-transparent text-text-primary outline-none w-full"
             />
           </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
           <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowKindPicker(!showKindPicker)}
               className="text-xs font-medium px-2.5 py-1 rounded-full transition-colors hover:ring-1 hover:ring-current cursor-pointer"
-              style={{ backgroundColor: `${NODE_KIND_COLORS[node.kind]}20`, color: NODE_KIND_COLORS[node.kind] }}
+              style={{
+                backgroundColor: `${nodeColor(node, groups)}20`,
+                color: nodeColor(node, groups),
+              }}
             >
               {NODE_KIND_LABELS[node.kind]}
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="inline-block ml-1 -mt-0.5">
@@ -215,6 +221,8 @@ function NodeDetailContent() {
                 </div>
               </>
             )}
+          </div>
+          <NodeHeaderMapAppearance node={node} geoType={geoType} />
           </div>
         </div>
 

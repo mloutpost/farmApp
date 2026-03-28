@@ -5,7 +5,7 @@ import { useFarmStore } from "@/store/farm-store";
 import { useMapStore } from "@/store/map-store";
 import { nodeColor } from "@/types";
 import type { MapLayer } from "@/types";
-import { nodeHasCropArea } from "@/lib/node-crop";
+import { nodeShowsCropHatch } from "@/lib/node-crop";
 
 function cropFp(n: { kind: string; data: unknown }): string {
   const d = n.data as Record<string, unknown>;
@@ -21,7 +21,7 @@ function cropFp(n: { kind: string; data: unknown }): string {
 function fingerprint(): string {
   const { nodes, groups } = useFarmStore.getState();
   const gfp = groups.map((g) => `${g.id}:${g.color ?? ""}`).join(";");
-  return nodes.map((n) => `${n.id}:${n.name}:${n.color ?? ""}:${n.groupId ?? ""}:${n.parentId ?? ""}:${n.kind}:${cropFp(n)}:${nodeHasCropArea(n) ? "1" : "0"}`).join("|") + "||" + gfp;
+  return nodes.map((n) => `${n.id}:${n.name}:${n.color ?? ""}:${n.cropHatch ?? "auto"}:${n.groupId ?? ""}:${n.parentId ?? ""}:${n.kind}:${cropFp(n)}:${nodeShowsCropHatch(n) ? "1" : "0"}`).join("|") + "||" + gfp;
 }
 
 function rebuildMapLayers() {
@@ -65,7 +65,7 @@ function rebuildMapLayers() {
                 nodeId: node.id,
                 kind: node.kind,
                 color,
-                hasCrop: nodeHasCropArea(node),
+                hasCrop: nodeShowsCropHatch(node),
               },
             },
           ],

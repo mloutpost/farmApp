@@ -16,3 +16,13 @@ export function nodeHasCropArea(node: FarmNode): boolean {
   }
   return false;
 }
+
+const HATCHABLE_KINDS = new Set<string>(["field", "pasture", "orchard"]);
+
+/** Whether this polygon should show crop/forage hatch on the map */
+export function nodeShowsCropHatch(node: FarmNode): boolean {
+  if (!HATCHABLE_KINDS.has(node.kind)) return false;
+  if (node.cropHatch === "on") return true;
+  if (node.cropHatch === "off") return false;
+  return nodeHasCropArea(node);
+}

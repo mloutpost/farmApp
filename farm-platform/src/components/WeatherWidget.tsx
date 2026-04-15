@@ -89,12 +89,22 @@ function calcGDD(daily: DayData[], lastFrost?: string): number {
   return Math.round(total);
 }
 
-export default function WeatherWidget({ compact = false }: { compact?: boolean }) {
+export type WeatherWidgetVariant = "default" | "compact" | "hud";
+
+export default function WeatherWidget({
+  compact = false,
+  variant = "default",
+}: {
+  compact?: boolean;
+  /** `hud` = large always-on layout for wall displays; ignores `compact` */
+  variant?: WeatherWidgetVariant;
+}) {
   const profile = useFarmStore((s) => s.profile);
+  const isHud = variant === "hud";
   const [data, setData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(!compact);
+  const [expanded, setExpanded] = useState(!compact && !isHud);
 
   const lat = profile.locationLat;
   const lng = profile.locationLng;
@@ -190,23 +200,29 @@ export default function WeatherWidget({ compact = false }: { compact?: boolean }
     return { prev, next, pct: Math.max(2, Math.min(100, pct)) };
   }, [gdd]);
 
+  const hudShell = isHud ? "rounded-2xl border border-border bg-bg-elevated/95 p-6 min-h-[200px]" : "";
+
   if (!lat || !lng)
     return (
-      <div className="rounded-lg bg-bg-surface border border-border px-3 py-2 text-xs text-text-muted">
+      <div
+        className={`rounded-lg bg-bg-surface border border-border px-3 py-2 text-xs text-text-muted ${isHud ? "text-sm p-6" : ""}`}
+      >
         Set your farm location in Settings to see weather.
       </div>
     );
 
   if (loading && !data)
     return (
-      <div className="rounded-lg bg-bg-elevated/95 backdrop-blur border border-border px-3 py-2 text-xs text-text-muted animate-pulse">
+      <div
+        className={`rounded-lg bg-bg-elevated/95 backdrop-blur border border-border px-3 py-2 text-xs text-text-muted animate-pulse ${isHud ? "p-8 text-base" : ""}`}
+      >
         Loading weather&hellip;
       </div>
     );
 
   if (error && !data)
     return (
-      <div className="rounded-lg bg-bg-surface border border-border px-3 py-2 text-xs text-red-400">
+      <div className={`rounded-lg bg-bg-surface border border-border px-3 py-2 text-xs text-red-400 ${isHud ? "p-6 text-sm" : ""}`}>
         {error}
       </div>
     );
@@ -214,6 +230,85 @@ export default function WeatherWidget({ compact = false }: { compact?: boolean }
   if (!data) return null;
 
   const [label, emoji] = wx(data.current.weatherCode);
+
+  const fmtDay = (d: string) =>
+    new Date(d + "T12:00").toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+
+  if (isHud) {
+    return (
+      <div className={`${hudShell} flex flex-col h-full min-h-0 overflow-hidden`}>
+        <div className="flex flex-wrap items-start justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-4">
+            <span className="text-5xl md:text-6xl leading-none" aria-hidden>
+              {emoji}
+            </span>
+            <div>
+              <div className="text-4xl md:text-5xl font-bold text-text-primary tabular-nums leading-none">
+                {data.current.temperature}°F
+              </div>
+              <div className="text-sm md:text-base text-text-secondary mt-1">{label}</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-6 text-sm md:text-base text-text-secondary">
+            <span>Humidity {data.current.humidity}%</span>
+            <span>Wind {data.current.windSpeed} mph</span>
+            {profile.hardinessZone && <span className="text-text-muted">Zone {profile.hardinessZone}</span>}
+          </div>
+        </div>
+
+        {frostDays.length > 0 && (
+          <div className="mt-4 rounded-xl bg-blue-500/10 border border-blue-500/25 px-4 py-2 text-sm text-blue-200">
+            <span className="font-semibold">Frost alert</span> — Lows ≤32°F:{" "}
+            {frostDays.map((d) => fmtDay(d.date)).join(", ")}
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-7 gap-1 text-center shrink-0">
+          {forecast.map((d) => {
+            const [, de] = wx(d.weatherCode);
+            return (
+              <div key={d.date} className="flex flex-col items-center gap-1 rounded-lg bg-bg-surface/50 py-2">
+                <span className="text-[10px] md:text-xs text-text-muted uppercase">
+                  {new Date(d.date + "T12:00").toLocaleDateString(undefined, { weekday: "short" }).slice(0, 3)}
+                </span>
+                <span className="text-xl md:text-2xl leading-none">{de}</span>
+                <span className="text-sm md:text-base font-semibold text-text-primary">{d.tempMax}°</span>
+                <span className={`text-xs ${d.tempMin <= 32 ? "text-blue-400 font-semibold" : "text-text-muted"}`}>
+                  {d.tempMin}°
+                </span>
+                {d.precipProb > 0 && <span className="text-[10px] text-accent">{d.precipProb}%</span>}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-8 border-t border-border pt-4 text-sm md:text-base">
+          <div>
+            <div className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">GDD (base 50°F)</div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl md:text-3xl font-bold text-text-primary tabular-nums">{gdd}</span>
+              <span className="text-text-secondary text-xs md:text-sm">
+                {milestone.prev.label} → {milestone.next.label}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-bg overflow-hidden mt-2 max-w-xs">
+              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${milestone.pct}%` }} />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-medium text-text-muted uppercase tracking-wide mb-1">Rain 7d / 30d</div>
+            <div className="text-xl font-semibold text-text-primary tabular-nums">
+              {precip.d7.toFixed(2)}″ / {precip.d30.toFixed(2)}″
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!expanded)
     return (
@@ -232,13 +327,6 @@ export default function WeatherWidget({ compact = false }: { compact?: boolean }
         )}
       </button>
     );
-
-  const fmtDay = (d: string) =>
-    new Date(d + "T12:00").toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
 
   return (
     <div className="w-80 rounded-xl bg-bg-elevated/95 backdrop-blur border border-border shadow-xl overflow-hidden">

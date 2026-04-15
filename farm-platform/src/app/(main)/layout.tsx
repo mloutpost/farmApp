@@ -14,12 +14,23 @@ const NAV_ITEMS = [
   { href: "/calendar", label: "Planner" },
   { href: "/finances", label: "Finances" },
   { href: "/timeline", label: "Timeline" },
+  { href: "/ops", label: "Ops" },
 ];
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useFarmSync();
   const isMapPage = pathname === "/";
+  const isOpsHud = pathname === "/ops";
+
+  if (isOpsHud) {
+    return (
+      <div className="h-screen w-screen overflow-hidden bg-bg text-text-primary">
+        {children}
+        <UndoManager />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg">

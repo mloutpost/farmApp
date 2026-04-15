@@ -105,7 +105,7 @@ function PlantingRow({ planting, onUpdate, onRemove, profile }: {
   const isOverdue = planting.dateExpectedHarvest && planting.dateExpectedHarvest < today && planting.status !== "harvested" && planting.status !== "failed";
 
   return (
-    <div className="rounded-lg border border-border/50 bg-bg overflow-hidden">
+    <div className="rounded-lg border border-border/50 bg-bg">
       {/* Row 1: crop + variety + remove */}
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="flex-1 min-w-0">

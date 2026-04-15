@@ -662,7 +662,27 @@ export interface FarmTask {
 /* ── Financial ── */
 
 export type TransactionType = "expense" | "revenue";
-export type ExpenseCategory = "seed" | "soil" | "amendment" | "fertilizer" | "pesticide" | "equipment" | "fuel" | "labor" | "infrastructure" | "feed" | "veterinary" | "processing" | "marketing" | "other";
+export type ExpenseCategory =
+  | "seed"
+  | "soil"
+  | "amendment"
+  | "fertilizer"
+  | "pesticide"
+  | "equipment"
+  | "fuel"
+  | "labor"
+  | "infrastructure"
+  | "feed"
+  | "veterinary"
+  | "processing"
+  | "marketing"
+  | "supplies"
+  | "consumables"
+  | "maintenance"
+  | "vehicle"
+  | "utilities"
+  | "insurance"
+  | "other";
 export type RevenueCategory = "produce" | "livestock" | "eggs" | "dairy" | "honey" | "value-added" | "agritourism" | "grant" | "other";
 
 export interface FinancialEntry {

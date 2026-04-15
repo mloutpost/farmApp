@@ -1,11 +1,12 @@
 import type {
   FarmNode,
   FarmProfile,
-  HarvestEntry,
   FinancialEntry,
   FarmTask,
 } from "@/types";
 import { NODE_KIND_LABELS } from "@/types";
+import type { CropEntry } from "@/lib/crop-catalog";
+import { buildSpringQuickStartHtml } from "@/lib/spring-quick-start";
 
 export function formatCurrency(amount: number): string {
   return `$${Math.abs(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -49,9 +50,23 @@ const baseStyles = `
   }
 `;
 
-function openReport(title: string, body: string, farmName: string) {
+const springReportExtraStyles = `
+  .frost-line { font-size: 13px; color: #333; margin: -8px 0 16px; font-weight: 500; }
+  .disclaimer { font-size: 11px; color: #666; margin-bottom: 20px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e5e7eb; }
+  .crop-card { page-break-inside: avoid; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
+  .crop-card:last-child { border-bottom: none; }
+  .crop-card h2 { font-size: 16px; margin: 0 0 4px; border: none; }
+  .crop-card .cat { font-size: 11px; color: #64748b; font-weight: 500; margin-left: 6px; }
+  .botanical { font-style: italic; color: #64748b; font-size: 12px; margin: 0 0 12px; }
+  .crop-card h3 { font-size: 13px; margin: 14px 0 6px; border: none; }
+  .crop-card .specs { margin: 0 0 8px; padding-left: 18px; font-size: 12px; }
+  .crop-card .notes { font-size: 12px; }
+  .crop-card ul { font-size: 12px; margin: 6px 0; padding-left: 18px; }
+`;
+
+function openReport(title: string, body: string, farmName: string, extraStyles = "") {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
-<style>${baseStyles}</style></head><body>
+<style>${baseStyles}${extraStyles}</style></head><body>
 <header><h1>${farmName}</h1></header>${body}
 <script>window.onload=()=>setTimeout(()=>window.print(),400);<\/script>
 </body></html>`;
@@ -273,4 +288,14 @@ ${expRows.length ? generateTable(["Category", "Amount"], expRows) : "<p>No expen
 ${cashRows.length ? generateTable(["Month", "Revenue", "Expenses", "Net"], cashRows) : "<p>No transactions.</p>"}`;
 
   openReport(`${profile.name} – ${season} Financial Report`, body, profile.name);
+}
+
+/** Printable spring planting guide from selected catalog crops (use browser Print → Save as PDF). */
+export function exportSpringQuickStartPrint(entries: CropEntry[], profile: FarmProfile, year: number): void {
+  if (entries.length === 0) return;
+  const inner = buildSpringQuickStartHtml(entries, profile.name, year, {
+    lastFrostSpring: profile.lastFrostSpring,
+    hardinessZone: profile.hardinessZone,
+  });
+  openReport(`${profile.name} – Spring Quick Start ${year}`, inner, profile.name, springReportExtraStyles);
 }

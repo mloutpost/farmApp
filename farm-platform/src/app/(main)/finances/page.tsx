@@ -14,7 +14,7 @@ const TABS = [
 const EXPENSE_CATEGORIES = [
   "seed", "soil", "amendment", "fertilizer", "pesticide", "equipment",
   "fuel", "labor", "infrastructure", "feed", "veterinary", "processing",
-  "marketing", "other",
+  "marketing", "supplies", "consumables", "maintenance", "vehicle", "utilities", "insurance", "other",
 ] as const;
 
 const REVENUE_CATEGORIES = [
@@ -26,7 +26,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   seed: "Seed", soil: "Soil", amendment: "Amendment", fertilizer: "Fertilizer",
   pesticide: "Pesticide", equipment: "Equipment", fuel: "Fuel", labor: "Labor",
   infrastructure: "Infrastructure", feed: "Feed", veterinary: "Veterinary",
-  processing: "Processing", marketing: "Marketing", other: "Other",
+  processing: "Processing", marketing: "Marketing", supplies: "General supplies",
+  consumables: "Consumables (filters, disposables, refills)",
+  maintenance: "Maintenance & repairs",
+  vehicle: "Vehicle & machinery", utilities: "Utilities", insurance: "Insurance", other: "Other",
   produce: "Produce", livestock: "Livestock", eggs: "Eggs", dairy: "Dairy",
   honey: "Honey", "value-added": "Value-Added", agritourism: "Agritourism",
   grant: "Grant",
@@ -64,6 +67,8 @@ function TransactionsView() {
 
   const currentYear = profile.currentSeason ?? new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [timeScope, setTimeScope] = useState<"year" | "all">("year");
+  const [viewMode, setViewMode] = useState<"list" | "timeline">("list");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -74,8 +79,11 @@ function TransactionsView() {
   const [filterNode, setFilterNode] = useState<string>("all");
 
   const seasonEntries = useMemo(
-    () => finances.filter((f) => !f.season || f.season === selectedYear),
-    [finances, selectedYear],
+    () =>
+      timeScope === "all"
+        ? finances
+        : finances.filter((f) => !f.season || f.season === selectedYear),
+    [finances, selectedYear, timeScope],
   );
 
   const filtered = useMemo(() => {
@@ -99,17 +107,46 @@ function TransactionsView() {
   const monthlyData = useMemo(() => {
     const data = Array.from({ length: 12 }, () => ({ revenue: 0, expense: 0 }));
     seasonEntries.forEach((f) => {
-      const m = new Date(f.date + "T00:00:00").getMonth();
-      if (f.type === "revenue") data[m].revenue += f.amount;
-      else data[m].expense += f.amount;
+      if (timeScope === "year") {
+        const m = new Date(f.date + "T00:00:00").getMonth();
+        const y = new Date(f.date + "T00:00:00").getFullYear();
+        if (y !== selectedYear) return;
+        if (f.type === "revenue") data[m].revenue += f.amount;
+        else data[m].expense += f.amount;
+      }
     });
     return data;
+  }, [seasonEntries, timeScope, selectedYear]);
+
+  const yearlyTotals = useMemo(() => {
+    const map = new Map<number, { revenue: number; expense: number }>();
+    seasonEntries.forEach((f) => {
+      const y = new Date(f.date + "T00:00:00").getFullYear();
+      const row = map.get(y) ?? { revenue: 0, expense: 0 };
+      if (f.type === "revenue") row.revenue += f.amount;
+      else row.expense += f.amount;
+      map.set(y, row);
+    });
+    return [...map.entries()].sort(([a], [b]) => a - b);
   }, [seasonEntries]);
 
-  const chartMax = useMemo(
-    () => Math.max(1, ...monthlyData.map((d) => Math.max(d.revenue, d.expense))),
-    [monthlyData],
-  );
+  const chartMax = useMemo(() => {
+    if (timeScope === "all") {
+      return Math.max(1, ...yearlyTotals.map(([, d]) => Math.max(d.revenue, d.expense)));
+    }
+    return Math.max(1, ...monthlyData.map((d) => Math.max(d.revenue, d.expense)));
+  }, [timeScope, yearlyTotals, monthlyData]);
+
+  const timelineWithBalance = useMemo(() => {
+    const sorted = [...filtered].sort(
+      (a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
+    );
+    let running = 0;
+    return sorted.map((e) => {
+      running += e.type === "revenue" ? e.amount : -e.amount;
+      return { entry: e, balance: running };
+    });
+  }, [filtered]);
 
   const expenseBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
@@ -221,16 +258,43 @@ function TransactionsView() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-6">
       {/* Controls row */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setSelectedYear((y) => y - 1)} className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
-          </button>
-          <span className="text-sm font-semibold text-text-primary min-w-[4ch] text-center">{selectedYear}</span>
-          <button onClick={() => setSelectedYear((y) => y + 1)} className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
-          </button>
-          <span className="text-xs text-text-muted">Season / Year</span>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-lg border border-border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setTimeScope("year")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                timeScope === "year" ? "bg-accent/15 text-accent" : "text-text-muted hover:text-text-secondary"
+              }`}
+            >
+              This season
+            </button>
+            <button
+              type="button"
+              onClick={() => setTimeScope("all")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                timeScope === "all" ? "bg-accent/15 text-accent" : "text-text-muted hover:text-text-secondary"
+              }`}
+            >
+              All time
+            </button>
+          </div>
+          {timeScope === "year" && (
+            <>
+              <button onClick={() => setSelectedYear((y) => y - 1)} className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
+              </button>
+              <span className="text-sm font-semibold text-text-primary min-w-[4ch] text-center">{selectedYear}</span>
+              <button onClick={() => setSelectedYear((y) => y + 1)} className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-surface transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
+              </button>
+              <span className="text-xs text-text-muted">Season / year for new entries</span>
+            </>
+          )}
+          {timeScope === "all" && (
+            <span className="text-xs text-text-muted">Totals include every recorded transaction</span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <button onClick={handleExportCsv} className="rounded-md border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors">
@@ -248,15 +312,21 @@ function TransactionsView() {
       {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="rounded-xl border border-border bg-bg-elevated p-5">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">Revenue</p>
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+              Revenue{timeScope === "all" ? " (all time)" : ""}
+            </p>
             <p className="text-2xl font-bold text-emerald-400">${fmt(totalRevenue)}</p>
           </div>
           <div className="rounded-xl border border-border bg-bg-elevated p-5">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">Expenses</p>
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+              Expenses{timeScope === "all" ? " (all time)" : ""}
+            </p>
             <p className="text-2xl font-bold text-red-400">${fmt(totalExpenses)}</p>
           </div>
           <div className="rounded-xl border border-border bg-bg-elevated p-5">
-            <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">Net Profit / Loss</p>
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-1">
+              Net profit / loss{timeScope === "all" ? " (all time)" : ""}
+            </p>
             <p className={`text-2xl font-bold ${net >= 0 ? "text-emerald-400" : "text-red-400"}`}>
               {net < 0 ? "-" : ""}${fmt(Math.abs(net))}
             </p>
@@ -338,6 +408,13 @@ function TransactionsView() {
                 </select>
               </div>
 
+              {form.type === "expense" && (
+                <p className="sm:col-span-2 lg:col-span-3 text-[11px] text-text-muted leading-relaxed -mt-1">
+                  <span className="font-medium text-text-secondary">Consumables</span> — filters, cartridges, refills, and other disposables you replace on a schedule.{" "}
+                  <span className="font-medium text-text-secondary">Maintenance</span> — repairs, service calls, and upkeep (e.g. system tune-ups, replacing a pump seal). Link a node if it&apos;s tied to a building or water system.
+                </p>
+              )}
+
               {/* Description */}
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-text-secondary mb-1">Description</label>
@@ -412,40 +489,74 @@ function TransactionsView() {
           </div>
         )}
 
-        {/* Monthly chart */}
+        {/* Monthly or yearly chart */}
         <div className="rounded-xl border border-border bg-bg-elevated p-6 mb-8">
-          <h2 className="text-base font-medium text-text-primary mb-4">Monthly Overview</h2>
-          <div className="flex items-end gap-1 h-48">
-            {monthlyData.map((d, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end">
-                <div className="flex gap-px w-full justify-center items-end flex-1">
-                  {/* Revenue bar */}
-                  <div
-                    className="w-[40%] rounded-t transition-all duration-300"
-                    style={{
-                      height: `${(d.revenue / chartMax) * 100}%`,
-                      minHeight: d.revenue > 0 ? "2px" : "0",
-                      backgroundColor: "rgb(52, 211, 153)",
-                      opacity: 0.8,
-                    }}
-                    title={`Revenue: $${fmt(d.revenue)}`}
-                  />
-                  {/* Expense bar */}
-                  <div
-                    className="w-[40%] rounded-t transition-all duration-300"
-                    style={{
-                      height: `${(d.expense / chartMax) * 100}%`,
-                      minHeight: d.expense > 0 ? "2px" : "0",
-                      backgroundColor: "rgb(248, 113, 113)",
-                      opacity: 0.8,
-                    }}
-                    title={`Expenses: $${fmt(d.expense)}`}
-                  />
+          <h2 className="text-base font-medium text-text-primary mb-4">
+            {timeScope === "all" ? "Totals by calendar year" : `Monthly overview (${selectedYear})`}
+          </h2>
+          {timeScope === "year" ? (
+            <div className="flex items-end gap-1 h-48">
+              {monthlyData.map((d, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end">
+                  <div className="flex gap-px w-full justify-center items-end flex-1">
+                    <div
+                      className="w-[40%] rounded-t transition-all duration-300"
+                      style={{
+                        height: `${(d.revenue / chartMax) * 100}%`,
+                        minHeight: d.revenue > 0 ? "2px" : "0",
+                        backgroundColor: "rgb(52, 211, 153)",
+                        opacity: 0.8,
+                      }}
+                      title={`Revenue: $${fmt(d.revenue)}`}
+                    />
+                    <div
+                      className="w-[40%] rounded-t transition-all duration-300"
+                      style={{
+                        height: `${(d.expense / chartMax) * 100}%`,
+                        minHeight: d.expense > 0 ? "2px" : "0",
+                        backgroundColor: "rgb(248, 113, 113)",
+                        opacity: 0.8,
+                      }}
+                      title={`Expenses: $${fmt(d.expense)}`}
+                    />
+                  </div>
+                  <span className="text-[10px] text-text-muted mt-1">{MONTHS[i]}</span>
                 </div>
-                <span className="text-[10px] text-text-muted mt-1">{MONTHS[i]}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : yearlyTotals.length === 0 ? (
+            <p className="text-sm text-text-muted py-8 text-center">No transactions yet.</p>
+          ) : (
+            <div className="flex items-end gap-2 h-48 overflow-x-auto pb-1">
+              {yearlyTotals.map(([yr, d]) => (
+                <div key={yr} className="flex flex-col items-center gap-0.5 h-full justify-end min-w-[48px]">
+                  <div className="flex gap-px w-full justify-center items-end flex-1">
+                    <div
+                      className="w-[40%] rounded-t transition-all duration-300"
+                      style={{
+                        height: `${(d.revenue / chartMax) * 100}%`,
+                        minHeight: d.revenue > 0 ? "2px" : "0",
+                        backgroundColor: "rgb(52, 211, 153)",
+                        opacity: 0.8,
+                      }}
+                      title={`${yr} revenue: $${fmt(d.revenue)}`}
+                    />
+                    <div
+                      className="w-[40%] rounded-t transition-all duration-300"
+                      style={{
+                        height: `${(d.expense / chartMax) * 100}%`,
+                        minHeight: d.expense > 0 ? "2px" : "0",
+                        backgroundColor: "rgb(248, 113, 113)",
+                        opacity: 0.8,
+                      }}
+                      title={`${yr} expenses: $${fmt(d.expense)}`}
+                    />
+                  </div>
+                  <span className="text-[10px] text-text-muted mt-1 font-mono">{yr}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-center justify-center gap-6 mt-4">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: "rgb(52, 211, 153)" }} />
@@ -553,10 +664,30 @@ function TransactionsView() {
               Clear filters
             </button>
           )}
-          <span className="ml-auto text-xs text-text-muted">{filtered.length} entries</span>
+          <div className="inline-flex rounded-lg border border-border overflow-hidden ml-auto">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === "list" ? "bg-bg-surface text-text-primary" : "text-text-muted hover:text-text-secondary"
+              }`}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("timeline")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === "timeline" ? "bg-bg-surface text-text-primary" : "text-text-muted hover:text-text-secondary"
+              }`}
+            >
+              Timeline
+            </button>
+          </div>
+          <span className="text-xs text-text-muted tabular-nums">{filtered.length} entries</span>
         </div>
 
-        {/* Transactions list */}
+        {/* Transactions list or timeline */}
         <div className="rounded-xl border border-border bg-bg-elevated overflow-hidden mb-8">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16">
@@ -566,6 +697,68 @@ function TransactionsView() {
               <p className="text-sm text-text-muted">No financial entries yet</p>
               <p className="text-xs text-text-muted mt-1">Click &ldquo;Add Entry&rdquo; to start tracking</p>
             </div>
+          ) : viewMode === "timeline" ? (
+            <div className="px-4 py-6">
+              <p className="text-[11px] text-text-muted mb-4">
+                Chronological order (oldest first). Running balance is cumulative for the filtered entries only.
+              </p>
+              <div className="relative pl-8 border-l border-border space-y-6">
+                {timelineWithBalance.map(({ entry, balance }) => (
+                  <div key={entry.id} className="relative">
+                    <span
+                      className={`absolute -left-[25px] top-1.5 w-3 h-3 rounded-full border-2 border-bg-elevated ${
+                        entry.type === "revenue" ? "bg-emerald-500" : "bg-red-400"
+                      }`}
+                    />
+                    <div className="rounded-lg border border-border/60 bg-bg-surface/40 px-3 py-2.5">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="text-xs font-mono text-text-muted">{entry.date}</span>
+                        <span
+                          className={`text-sm font-semibold tabular-nums ${
+                            entry.type === "revenue" ? "text-emerald-400" : "text-red-400"
+                          }`}
+                        >
+                          {entry.type === "expense" ? "-" : "+"}${fmt(entry.amount)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-text-primary font-medium mt-1">{entry.description}</p>
+                      <div className="flex flex-wrap gap-2 mt-1.5 text-[10px] text-text-muted">
+                        <span className="px-2 py-0.5 rounded-full bg-bg-elevated border border-border/50">
+                          {CATEGORY_LABELS[entry.category] ?? entry.category}
+                        </span>
+                        {entry.vendor && <span>Vendor: {entry.vendor}</span>}
+                        {entry.nodeId && nodeMap[entry.nodeId] && <span>Node: {nodeMap[entry.nodeId]}</span>}
+                      </div>
+                      {entry.notes && <p className="text-xs text-text-secondary mt-2">{entry.notes}</p>}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/40">
+                        <span className="text-[10px] text-text-muted">
+                          Running balance:{" "}
+                          <span className={balance >= 0 ? "text-emerald-400" : "text-red-400"}>
+                            {balance < 0 ? "-" : ""}${fmt(Math.abs(balance))}
+                          </span>
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(entry)}
+                            className="text-[10px] text-accent hover:underline"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(entry.id)}
+                            className="text-[10px] text-red-400 hover:underline"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             <div>
               {filtered.map((entry) => {
@@ -573,6 +766,7 @@ function TransactionsView() {
                 return (
                   <div key={entry.id} className="border-b border-border/50 last:border-b-0">
                     <button
+                      type="button"
                       onClick={() => setExpandedId(isExpanded ? null : entry.id)}
                       className="w-full grid grid-cols-[1fr_auto_auto] sm:grid-cols-[90px_1fr_auto_auto_auto] items-center gap-3 px-4 py-3 text-left hover:bg-bg-surface/50 transition-colors"
                     >
@@ -625,12 +819,14 @@ function TransactionsView() {
                         )}
                         <div className="flex items-center gap-2">
                           <button
+                            type="button"
                             onClick={() => handleEdit(entry)}
                             className="rounded-md border border-border bg-bg-surface px-3 py-1 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
                           >
                             Edit
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDelete(entry.id)}
                             className="rounded-md border border-red-500/30 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
                           >

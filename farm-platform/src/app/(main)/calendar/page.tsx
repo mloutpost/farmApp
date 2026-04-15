@@ -3,14 +3,16 @@
 import { useState } from "react";
 import CalendarView from "./CalendarView";
 import TasksView from "./TasksView";
+import SpringQuickStartPanel from "@/components/planner/SpringQuickStartPanel";
 
 const TABS = [
   { id: "calendar" as const, label: "Calendar" },
   { id: "tasks" as const, label: "Tasks" },
+  { id: "spring" as const, label: "Spring quick start" },
 ];
 
 export default function PlannerPage() {
-  const [tab, setTab] = useState<"calendar" | "tasks">("calendar");
+  const [tab, setTab] = useState<"calendar" | "tasks" | "spring">("calendar");
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -40,7 +42,7 @@ export default function PlannerPage() {
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {tab === "calendar" ? <CalendarView /> : <TasksView />}
+        {tab === "calendar" ? <CalendarView /> : tab === "tasks" ? <TasksView /> : <SpringQuickStartPanel />}
       </div>
     </div>
   );

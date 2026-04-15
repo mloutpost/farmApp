@@ -9,6 +9,7 @@ import {
   type CropEntry,
   type CropCategory,
 } from "@/lib/crop-catalog";
+import { groupCompanionsByBenefit } from "@/lib/companion-sort";
 
 interface CropPickerProps {
   value: string;
@@ -219,6 +220,7 @@ export function CropInfoCard({ catalogId }: { catalogId: string }) {
   const isTree = entry.category === "tree";
   const isRowCrop = entry.category === "row-crop";
   const isForage = entry.category === "forage";
+  const companionGroups = groupCompanionsByBenefit(entry.companions);
 
   return (
     <div className="rounded-md border border-accent/20 bg-accent/5 overflow-hidden">
@@ -317,11 +319,28 @@ export function CropInfoCard({ catalogId }: { catalogId: string }) {
           )}
 
           {entry.companions.length > 0 && (
-            <div>
-              <div className="text-[10px] font-medium text-green-400 mb-0.5">
+            <div className="space-y-2">
+              <div className="text-[10px] font-medium text-green-400">
                 {isRowCrop || isForage ? "Good rotation partners" : "Good companions"}
               </div>
-              <div className="text-[10px] text-text-secondary">{entry.companions.join(", ")}</div>
+              {companionGroups.pest.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-medium text-emerald-400/90 mb-0.5">Pest management</div>
+                  <div className="text-[10px] text-text-secondary">{companionGroups.pest.join(", ")}</div>
+                </div>
+              )}
+              {companionGroups.nutrient.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-medium text-teal-400/90 mb-0.5">Nutrient & soil restoration</div>
+                  <div className="text-[10px] text-text-secondary">{companionGroups.nutrient.join(", ")}</div>
+                </div>
+              )}
+              {companionGroups.general.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-medium text-green-400/80 mb-0.5">Other companions</div>
+                  <div className="text-[10px] text-text-secondary">{companionGroups.general.join(", ")}</div>
+                </div>
+              )}
             </div>
           )}
 

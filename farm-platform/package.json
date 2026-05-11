@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed:app-settings": "tsx scripts/seed-app-settings.ts",
+    "import:liturgy": "tsx scripts/import-liturgical-email.ts",
+    "check:parser": "tsx scripts/parse-liturgy-fixture.ts",
     "audit:clickables": "rg '<button' src -g '*.tsx' -A 2 2>/dev/null | rg -v 'onClick|type=' || echo 'Audit complete'"
   },
   "dependencies": {
@@ -25,6 +27,7 @@
     "proj4": "^2.20.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "romcal": "^3.0.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

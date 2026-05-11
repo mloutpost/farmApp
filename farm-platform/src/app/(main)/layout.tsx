@@ -7,6 +7,7 @@ import LoadDemoBanner from "@/components/LoadDemoBanner";
 import UserMenu from "@/components/UserMenu";
 import PersistentMap from "@/components/map/PersistentMap";
 import UndoManager from "@/components/UndoManager";
+import FamilyDashboardChrome from "@/components/family-dashboard/FamilyDashboardChrome";
 
 const NAV_ITEMS = [
   { href: "/", label: "Map" },
@@ -15,6 +16,8 @@ const NAV_ITEMS = [
   { href: "/finances", label: "Finances" },
   { href: "/timeline", label: "Timeline" },
   { href: "/ops", label: "Ops" },
+  { href: "/beth", label: "Beth" },
+  { href: "/family-dashboard", label: "TV board" },
 ];
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -22,6 +25,20 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   useFarmSync();
   const isMapPage = pathname === "/";
   const isOpsHud = pathname === "/ops";
+  const isFamilyDashboard =
+    pathname === "/family-dashboard" || pathname.startsWith("/family-dashboard/");
+
+  if (isFamilyDashboard) {
+    // Let the dashboard shell scroll as a unit when liturgy/events exceed the
+    // viewport (no nested scrollbars in the parchment panels). Horizontal
+    // overflow stays clipped so the fresco never “sideways-scrolls”.
+    return (
+      <div className="h-screen w-screen min-h-0 overflow-x-hidden overflow-y-auto overscroll-y-contain bg-[#163c26]">
+        <FamilyDashboardChrome>{children}</FamilyDashboardChrome>
+        <UndoManager />
+      </div>
+    );
+  }
 
   if (isOpsHud) {
     return (

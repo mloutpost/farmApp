@@ -1,0 +1,9 @@
+{
+  "_comment": "Optional daily notes keyed by MM-DD (Gregorian). Add short excerpts you type yourself from Dom Guéranger or other approved sources. Omit a date to use the on-screen placeholder.",
+  "01-01": {
+    "title": "Mary, Mother of God (example slot)",
+    "reflection": "Replace this block with your own summary for this day. The TV dashboard reads this file from /public/family-dashboard/gueranger.json.",
+    "collect": "Optional: your prayer summary for the collect.",
+    "readings": "Optional: one-line reminder of readings or a link you keep in family notes."
+  }
+}

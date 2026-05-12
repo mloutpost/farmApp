@@ -35,6 +35,18 @@ export interface Vacation {
   endDate: string;
   journal: string;
   costLines: VacationCostLine[];
+  /** Airline / carrier code or name for departing flight (e.g. UA, Delta). */
+  departFlightCarrier: string;
+  /** Flight number for departing leg (e.g. 1842). */
+  departFlightNumber: string;
+  /** ISO date YYYY-MM-DD for departing flight. */
+  departFlightDate: string;
+  /** Local HH:mm for departing flight; empty creates an all-day event on departFlightDate. */
+  departFlightTime: string;
+  returnFlightCarrier: string;
+  returnFlightNumber: string;
+  returnFlightDate: string;
+  returnFlightTime: string;
 }
 
 function uid(): string {
@@ -58,7 +70,26 @@ export function vacationTotalUsd(v: Vacation): number {
 interface TravelPlanningState {
   vacations: Vacation[];
   addVacation: (input: { title: string; startDate: string; endDate: string }) => void;
-  updateVacation: (id: string, patch: Partial<Pick<Vacation, "title" | "startDate" | "endDate" | "journal">>) => void;
+  updateVacation: (
+    id: string,
+    patch: Partial<
+      Pick<
+        Vacation,
+        | "title"
+        | "startDate"
+        | "endDate"
+        | "journal"
+        | "departFlightCarrier"
+        | "departFlightNumber"
+        | "departFlightDate"
+        | "departFlightTime"
+        | "returnFlightCarrier"
+        | "returnFlightNumber"
+        | "returnFlightDate"
+        | "returnFlightTime"
+      >
+    >
+  ) => void;
   removeVacation: (id: string) => void;
   addCostLine: (vacationId: string, category: CostCategoryId) => void;
   updateCostLine: (
@@ -84,6 +115,14 @@ export const useTravelPlanningStore = create<TravelPlanningState>()(
               endDate,
               journal: "",
               costLines: [],
+              departFlightCarrier: "",
+              departFlightNumber: "",
+              departFlightDate: startDate,
+              departFlightTime: "",
+              returnFlightCarrier: "",
+              returnFlightNumber: "",
+              returnFlightDate: endDate,
+              returnFlightTime: "",
             },
           ]),
         })),
@@ -134,6 +173,30 @@ export const useTravelPlanningStore = create<TravelPlanningState>()(
     {
       name: "farm-app-travel-planning",
       storage: createJSONStorage(() => localStorage),
+      merge: (persistedState, currentState) => {
+        const p = persistedState as Partial<Pick<TravelPlanningState, "vacations">> | undefined;
+        const c = currentState as TravelPlanningState;
+        if (!p?.vacations) return c;
+        return {
+          ...c,
+          ...p,
+          vacations: p.vacations.map((row) => {
+            const v = row as Vacation;
+            return {
+              ...v,
+              costLines: v.costLines ?? [],
+              departFlightCarrier: v.departFlightCarrier ?? "",
+              departFlightNumber: v.departFlightNumber ?? "",
+              departFlightDate: v.departFlightDate ?? v.startDate,
+              departFlightTime: v.departFlightTime ?? "",
+              returnFlightCarrier: v.returnFlightCarrier ?? "",
+              returnFlightNumber: v.returnFlightNumber ?? "",
+              returnFlightDate: v.returnFlightDate ?? v.endDate,
+              returnFlightTime: v.returnFlightTime ?? "",
+            };
+          }),
+        };
+      },
     }
   )
 );

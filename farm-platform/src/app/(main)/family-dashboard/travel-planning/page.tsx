@@ -18,7 +18,13 @@ import {
   requestGoogleAccessToken,
   type GoogleAccessTokenResult,
 } from "@/lib/family-dashboard/google-token";
-import { insertVacationAllDayEvent } from "@/lib/family-dashboard/google-calendar-insert";
+import {
+  addMinutesToRFC3339,
+  insertSingleDayAllDayEvent,
+  insertTimedCalendarEvent,
+  insertVacationAllDayEvent,
+  localWallTimeToRFC3339,
+} from "@/lib/family-dashboard/google-calendar-insert";
 
 const serif = EB_Garamond({
   subsets: ["latin"],
@@ -33,6 +39,21 @@ const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD
 function formatRange(v: Vacation): string {
   if (v.startDate === v.endDate) return v.startDate;
   return `${v.startDate} → ${v.endDate}`;
+}
+
+const FLIGHT_BLOCK_MIN = 90;
+
+function isoDateOk(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function formatFlightSummary(carrier: string, flightNumber: string): string {
+  const c = carrier.trim();
+  const n = flightNumber.trim();
+  if (!c && !n) return "Flight";
+  if (!c) return `Flight ${n}`;
+  if (!n) return `${c} flight`;
+  return `${c} ${n}`;
 }
 
 export default function TravelPlanningPage() {
@@ -117,28 +138,98 @@ export default function TravelPlanningPage() {
 
       tokenPromise
         .then(async (result) => {
+          const fresh = useTravelPlanningStore.getState().vacations.find((x) => x.id === v.id) ?? v;
           const desc =
-            `${v.journal ? `${v.journal}\n\n` : ""}` +
-            `Estimated total: ${money.format(vacationTotalUsd(v))}\n` +
-            (v.costLines.length
-              ? v.costLines
+            `${fresh.journal ? `${fresh.journal}\n\n` : ""}` +
+            `Estimated total: ${money.format(vacationTotalUsd(fresh))}\n` +
+            (fresh.costLines.length
+              ? fresh.costLines
                   .map(
                     (l) =>
                       `- ${COST_CATEGORY_LABELS[l.category]}: ${money.format(l.amount)}${l.note ? ` (${l.note})` : ""}`
                   )
                   .join("\n")
               : "");
-          const out = await insertVacationAllDayEvent(result.accessToken, {
-            summary: v.title,
+          const trip = await insertVacationAllDayEvent(result.accessToken, {
+            summary: fresh.title,
             description: desc || undefined,
-            startDate: v.startDate,
-            endDate: v.endDate,
+            startDate: fresh.startDate,
+            endDate: fresh.endDate,
             attendeeEmails,
           });
-          const msg = out.htmlLink
-            ? `Created. ${out.htmlLink}`
-            : `Created (event id ${out.id}).`;
-          setSyncMessage((m) => ({ ...m, [v.id]: msg }));
+
+          const flightNotes = [fresh.title && `Trip: ${fresh.title}`, fresh.journal?.trim()]
+            .filter(Boolean)
+            .join("\n\n");
+
+          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+          const syncLeg = async (
+            leg: "Depart" | "Return",
+            carrier: string,
+            flightNumber: string,
+            date: string,
+            timeLocal: string
+          ): Promise<{ id: string; htmlLink?: string } | null> => {
+            const c = carrier.trim();
+            const n = flightNumber.trim();
+            if (!c || !n || !isoDateOk(date)) return null;
+
+            const summary = `${formatFlightSummary(c, n)} · ${leg}`;
+            const hasTime = timeLocal.trim().length > 0;
+            if (hasTime) {
+              const startRfc = localWallTimeToRFC3339(date, timeLocal);
+              if (!startRfc) {
+                throw new Error(
+                  `${leg} flight: pick a valid local time, or clear the time field for an all-day flight.`
+                );
+              }
+              const endRfc = addMinutesToRFC3339(startRfc, FLIGHT_BLOCK_MIN);
+              if (!endRfc) {
+                throw new Error(`${leg} flight: could not compute end time.`);
+              }
+              return insertTimedCalendarEvent(result.accessToken, {
+                summary,
+                description: flightNotes || undefined,
+                startDateTime: startRfc,
+                endDateTime: endRfc,
+                timeZone,
+                attendeeEmails,
+              });
+            }
+
+            return insertSingleDayAllDayEvent(result.accessToken, {
+              summary,
+              description: flightNotes || undefined,
+              date,
+              attendeeEmails,
+            });
+          };
+
+          const departOut = await syncLeg(
+            "Depart",
+            fresh.departFlightCarrier ?? "",
+            fresh.departFlightNumber ?? "",
+            fresh.departFlightDate ?? fresh.startDate,
+            fresh.departFlightTime ?? ""
+          );
+          const returnOut = await syncLeg(
+            "Return",
+            fresh.returnFlightCarrier ?? "",
+            fresh.returnFlightNumber ?? "",
+            fresh.returnFlightDate ?? fresh.endDate,
+            fresh.returnFlightTime ?? ""
+          );
+
+          const parts: string[] = [];
+          parts.push(trip.htmlLink ? `Trip: ${trip.htmlLink}` : `Trip (id ${trip.id})`);
+          if (departOut) {
+            parts.push(departOut.htmlLink ? `Depart: ${departOut.htmlLink}` : `Depart (id ${departOut.id})`);
+          }
+          if (returnOut) {
+            parts.push(returnOut.htmlLink ? `Return: ${returnOut.htmlLink}` : `Return (id ${returnOut.id})`);
+          }
+          setSyncMessage((m) => ({ ...m, [v.id]: parts.join(" · ") }));
         })
         .catch((e: unknown) => {
           const msg = e instanceof Error ? e.message : String(e);
@@ -178,8 +269,9 @@ export default function TravelPlanningPage() {
             Travel planning journal
           </h1>
           <p className="mt-3 max-w-prose text-sm leading-relaxed" style={{ color: "#5b3a1c" }}>
-            Plan vacations on a timeline, estimate costs by category, and sync an all-day block to Google Calendar with
-            attendees.
+            Plan vacations on a timeline, estimate costs by category, and sync to Google Calendar: one all-day trip
+            block plus optional departing and returning flight events (carrier, flight number, date, and optional local
+            time).
           </p>
           <Link
             href="/family-dashboard"
@@ -349,6 +441,118 @@ export default function TravelPlanningPage() {
                           </div>
 
                           <div>
+                            <h4 className="text-sm font-semibold uppercase tracking-[0.12em]" style={{ color: PROVENCE.toileBlueDeep }}>
+                              Flights (separate calendar events)
+                            </h4>
+                            <p className="mt-1 text-xs leading-snug" style={{ color: "#5b3a1c" }}>
+                              Enter carrier and flight number for each leg. Sync creates its own event: timed if you set
+                              local time, otherwise an all-day event on that date.
+                            </p>
+                            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                              <div
+                                className="rounded-sm border p-3"
+                                style={{ borderColor: "rgba(31,58,85,0.2)", background: "rgba(255,255,255,0.4)" }}
+                              >
+                                <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: "#8a6f43" }}>
+                                  Departing
+                                </p>
+                                <div className="mt-2 grid gap-2">
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Carrier</span>
+                                    <input
+                                      value={v.departFlightCarrier ?? ""}
+                                      onChange={(e) => updateVacation(v.id, { departFlightCarrier: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                      placeholder="UA, Delta, …"
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Flight number</span>
+                                    <input
+                                      value={v.departFlightNumber ?? ""}
+                                      onChange={(e) => updateVacation(v.id, { departFlightNumber: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                      placeholder="1842"
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Date</span>
+                                    <input
+                                      type="date"
+                                      value={v.departFlightDate ?? v.startDate}
+                                      onChange={(e) => updateVacation(v.id, { departFlightDate: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Local time (optional)</span>
+                                    <input
+                                      type="time"
+                                      value={v.departFlightTime ?? ""}
+                                      onChange={(e) => updateVacation(v.id, { departFlightTime: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5 tabular-nums"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                              <div
+                                className="rounded-sm border p-3"
+                                style={{ borderColor: "rgba(31,58,85,0.2)", background: "rgba(255,255,255,0.4)" }}
+                              >
+                                <p className="text-xs font-bold uppercase tracking-[0.18em]" style={{ color: "#8a6f43" }}>
+                                  Returning
+                                </p>
+                                <div className="mt-2 grid gap-2">
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Carrier</span>
+                                    <input
+                                      value={v.returnFlightCarrier ?? ""}
+                                      onChange={(e) => updateVacation(v.id, { returnFlightCarrier: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                      placeholder="UA, Delta, …"
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Flight number</span>
+                                    <input
+                                      value={v.returnFlightNumber ?? ""}
+                                      onChange={(e) => updateVacation(v.id, { returnFlightNumber: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                      placeholder="1204"
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Date</span>
+                                    <input
+                                      type="date"
+                                      value={v.returnFlightDate ?? v.endDate}
+                                      onChange={(e) => updateVacation(v.id, { returnFlightDate: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1 text-sm">
+                                    <span style={{ color: "#5b3a1c" }}>Local time (optional)</span>
+                                    <input
+                                      type="time"
+                                      value={v.returnFlightTime ?? ""}
+                                      onChange={(e) => updateVacation(v.id, { returnFlightTime: e.target.value })}
+                                      className="rounded-sm border px-2 py-1.5 tabular-nums"
+                                      style={{ borderColor: "rgba(31,58,85,0.35)" }}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
                             <div className="flex items-center justify-between gap-2">
                               <h4 className="text-sm font-semibold uppercase tracking-[0.12em]" style={{ color: PROVENCE.toileBlueDeep }}>
                                 Costs
@@ -446,7 +650,8 @@ export default function TravelPlanningPage() {
                               Sync vacation to Google Calendar
                             </h4>
                             <p className="mt-1 text-xs leading-snug" style={{ color: "#5b3a1c" }}>
-                              Creates an all-day event from start through end (inclusive). Add comma-separated attendee emails to send invites.
+                              Creates the trip all-day span (inclusive), then one event per flight leg when carrier,
+                              flight number, and date are filled. Add comma-separated attendee emails to send invites.
                             </p>
                             <label className="mt-3 flex flex-col gap-1 text-sm">
                               <span style={{ color: "#5b3a1c" }}>Attendee emails</span>

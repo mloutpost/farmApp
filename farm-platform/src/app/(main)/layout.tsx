@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Map" },
   { href: "/flow", label: "Nodes" },
   { href: "/calendar", label: "Planner" },
+  { href: "/family-dashboard/travel-planning", label: "Travel" },
   { href: "/finances", label: "Finances" },
   { href: "/timeline", label: "Timeline" },
   { href: "/ops", label: "Ops" },
@@ -55,8 +56,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <nav className="flex items-center gap-1" role="navigation" aria-label="Main">
           {NAV_ITEMS.map((item) => {
             const active =
-              pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href));
+              item.href === "/family-dashboard"
+                ? pathname === "/family-dashboard"
+                : pathname === item.href ||
+                  (item.href !== "/" && pathname.startsWith(`${item.href}/`));
             return (
               <Link
                 key={item.href}

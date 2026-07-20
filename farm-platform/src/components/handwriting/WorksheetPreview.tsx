@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { renderTextLine } from "@/lib/handwriting/glyph-render";
 import type { WorksheetLayout } from "@/lib/handwriting/worksheet-layout";
 
+import { PAGE_HEIGHT_PT } from "@/lib/handwriting/worksheet-layout";
+
 const START_DOT_RADIUS = 2.75;
 const START_DOT_FILL = "#2d6a4f";
 const RULE_COLOR = "#888888";
@@ -16,6 +18,17 @@ interface WorksheetPreviewProps {
   childName: string;
   showStartDots?: boolean;
   showStrokeOrder?: boolean;
+  /** When true, render a full US-letter page (print). When false, crop to content (screen). */
+  fillPage?: boolean;
+}
+
+function contentHeight(layout: WorksheetLayout): number {
+  if (layout.rows.length === 0) return layout.pageHeight;
+  const last = layout.rows[layout.rows.length - 1];
+  return Math.min(
+    PAGE_HEIGHT_PT,
+    Math.ceil(last.y + layout.descenderLineOffset + layout.margin)
+  );
 }
 
 function WorksheetRowSvg({
@@ -97,9 +110,17 @@ export default function WorksheetPreview({
   childName,
   showStartDots = true,
   showStrokeOrder = false,
+  fillPage = true,
 }: WorksheetPreviewProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const viewHeight = layout ? (fillPage ? layout.pageHeight : contentHeight(layout)) : PAGE_HEIGHT_PT;
+  const pageStyle = {
+    width: "100%",
+    maxWidth: "8.5in",
+    aspectRatio: `${layout?.pageWidth ?? 612} / ${viewHeight}`,
+  } as const;
 
   const header = useMemo(() => {
     if (!layout) return null;
@@ -128,7 +149,7 @@ export default function WorksheetPreview({
     return (
       <div
         className="worksheet-page flex items-center justify-center rounded-sm border bg-white shadow-md"
-        style={{ width: "8.5in", height: "11in", maxWidth: "100%", aspectRatio: "8.5 / 11" }}
+        style={pageStyle}
       >
         <p className="text-sm text-gray-500">Preparing worksheet…</p>
       </div>
@@ -137,18 +158,19 @@ export default function WorksheetPreview({
 
   return (
     <div
-      className="worksheet-page overflow-hidden rounded-sm border border-gray-300 bg-white shadow-md"
-      style={{ width: "8.5in", height: "11in", maxWidth: "100%", aspectRatio: "8.5 / 11" }}
+      className={`worksheet-page overflow-hidden rounded-sm border border-gray-300 bg-white shadow-md${fillPage ? " worksheet-page--letter" : ""}`}
+      style={pageStyle}
     >
       <svg
-        viewBox={`0 0 ${layout.pageWidth} ${layout.pageHeight}`}
+        viewBox={`0 0 ${layout.pageWidth} ${viewHeight}`}
         width="100%"
         height="100%"
+        preserveAspectRatio="xMidYMin meet"
         xmlns="http://www.w3.org/2000/svg"
         role="img"
         aria-label="Handwriting tracing worksheet"
       >
-        <rect width={layout.pageWidth} height={layout.pageHeight} fill="white" />
+        <rect width={layout.pageWidth} height={viewHeight} fill="white" />
         {header}
         {layout.rows.map((row, idx) => (
           <WorksheetRowSvg

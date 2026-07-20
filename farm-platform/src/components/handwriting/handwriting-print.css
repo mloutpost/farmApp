@@ -1,6 +1,16 @@
 @page {
-  size: 8.5in 11in;
+  size: letter portrait;
   margin: 0;
+}
+
+/* Screen: hide the dedicated print worksheet (shown only in @media print). */
+.worksheet-page-print {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 @media print {
@@ -8,40 +18,46 @@
   body {
     margin: 0 !important;
     padding: 0 !important;
-    width: 8.5in;
-    height: 11in;
-    overflow: hidden;
+    width: 100%;
+    height: auto;
+    overflow: visible !important;
     background: white !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  body * {
-    visibility: hidden;
+  .handwriting-app {
+    min-height: 0 !important;
+    background: white !important;
   }
 
-  .worksheet-print-root,
-  .worksheet-print-root * {
-    visibility: visible;
+  .handwriting-app .no-print {
+    display: none !important;
+  }
+
+  .worksheet-screen-preview {
+    display: none !important;
+  }
+
+  .worksheet-page-print {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    clip: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    white-space: normal;
   }
 
   .worksheet-print-root {
-    position: fixed;
-    inset: 0;
-    width: 8.5in;
-    height: 11in;
+    position: static !important;
+    width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
     background: white !important;
     background-image: none !important;
-  }
-
-  .worksheet-print-root > div {
-    width: 8.5in !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    justify-content: flex-start !important;
   }
 
   .worksheet-page {
@@ -49,11 +65,11 @@
     height: 11in !important;
     max-width: none !important;
     aspect-ratio: auto !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
     border: none !important;
-    margin: 0 !important;
     border-radius: 0 !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     page-break-after: avoid;
     page-break-inside: avoid;
   }
@@ -61,10 +77,16 @@
   .worksheet-page svg {
     width: 8.5in !important;
     height: 11in !important;
-    display: block;
+    display: block !important;
+    overflow: visible !important;
   }
 
-  .no-print {
-    display: none !important;
+  .worksheet-page svg path,
+  .worksheet-page svg line,
+  .worksheet-page svg circle,
+  .worksheet-page svg text,
+  .worksheet-page svg rect {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

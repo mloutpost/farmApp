@@ -175,7 +175,7 @@ export default function HandwritingWorksheetApp() {
   const [showStrokeOrder, setShowStrokeOrder] = useState(false);
   const [childName, setChildName] = useState("");
 
-  const layout = useMemo(() => {
+  const screenLayout = useMemo(() => {
     if (!ready) return null;
     return buildWorksheetLayout(null, {
       text,
@@ -185,15 +185,25 @@ export default function HandwritingWorksheetApp() {
     });
   }, [ready, text, fontSize, autoFill, showSolidModel]);
 
+  const printLayout = useMemo(() => {
+    if (!ready) return null;
+    return buildWorksheetLayout(null, {
+      text,
+      fontSize,
+      autoFill: true,
+      showSolidModel,
+    });
+  }, [ready, text, fontSize, showSolidModel]);
+
   const handlePrint = useCallback(() => {
     window.print();
   }, []);
 
-  const rowCount = layout?.rows.length ?? 0;
+  const rowCount = screenLayout?.rows.length ?? 0;
 
   return (
     <div
-      className={`min-h-screen w-full ${serif.variable}`}
+      className={`handwriting-app min-h-screen w-full ${serif.variable}`}
       style={{
         fontFamily: "var(--font-handwriting-serif), Georgia, serif",
         background: PROVENCE.woodShadow,
@@ -248,7 +258,7 @@ export default function HandwritingWorksheetApp() {
 
             <SliderCard
               label={autoFill ? "Letter size (auto)" : "Letter size"}
-              value={autoFill ? (layout?.fontSize ?? fontSize) : fontSize}
+              value={autoFill ? (screenLayout?.fontSize ?? fontSize) : fontSize}
               min={MIN_FONT}
               max={MAX_FONT}
               step={2}
@@ -315,18 +325,28 @@ export default function HandwritingWorksheetApp() {
       </div>
 
       <div
-        className="worksheet-print-root px-4 pb-28 sm:px-6 sm:pb-8"
+        className="worksheet-print-root px-4 pb-28 pt-4 sm:px-6 sm:pb-8"
         style={{
           backgroundImage: PARCHMENT_TEXTURE,
           backgroundColor: PROVENCE.toileCream,
         }}
       >
-        <div className="mx-auto flex max-w-lg justify-center sm:max-w-2xl">
+        <div className="worksheet-screen-preview mx-auto w-full max-w-lg sm:max-w-2xl">
           <WorksheetPreview
-            layout={layout}
+            layout={screenLayout}
             childName={childName}
             showStartDots={showStartDots}
             showStrokeOrder={showStrokeOrder}
+            fillPage={autoFill}
+          />
+        </div>
+        <div className="worksheet-page-print" aria-hidden>
+          <WorksheetPreview
+            layout={printLayout}
+            childName={childName}
+            showStartDots={showStartDots}
+            showStrokeOrder={showStrokeOrder}
+            fillPage
           />
         </div>
       </div>
@@ -344,7 +364,7 @@ export default function HandwritingWorksheetApp() {
           <button
             type="button"
             onClick={handlePrint}
-            disabled={!layout || layout.rows.length === 0 || !ready}
+            disabled={!printLayout || printLayout.rows.length === 0 || !ready}
             className="min-h-[48px] flex-1 rounded-sm border px-4 py-3 text-sm font-semibold uppercase tracking-[0.12em] disabled:opacity-40"
             style={{
               borderColor: PROVENCE.toileBlueDeep,

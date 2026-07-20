@@ -102,6 +102,17 @@ function buildLayoutDraft(font: null, input: BuildWorksheetLayoutInput): LayoutD
     }
   }
 
+  if (input.autoFill && rows.length > 1) {
+    const blockHeight = rows.length * rowHeight;
+    const gap = (contentBottom - contentTop - blockHeight) / (rows.length - 1);
+    if (gap > 0) {
+      for (let i = 0; i < rows.length; i++) {
+        rows[i] = { ...rows[i], y: contentTop + i * (rowHeight + gap) };
+      }
+      y = contentTop + blockHeight + gap * (rows.length - 1);
+    }
+  }
+
   return {
     rows,
     rowHeight,

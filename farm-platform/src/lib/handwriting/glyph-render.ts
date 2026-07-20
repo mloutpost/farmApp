@@ -40,6 +40,9 @@ export function measureTextWidth(_font: null, text: string, fontSize: number): n
   return total;
 }
 
+/** Reserve space for stroke ink that can extend past glyph advance width. */
+const INK_PADDING_PT = 10;
+
 export function wrapText(
   _font: null,
   text: string,
@@ -49,6 +52,8 @@ export function wrapText(
   const normalized = text.trim().replace(/\s+/g, " ");
   if (!normalized) return [];
 
+  const safeWidth = Math.max(1, maxWidth - INK_PADDING_PT);
+
   const words = normalized.split(" ");
   const lines: string[] = [];
   let current = "";
@@ -56,7 +61,7 @@ export function wrapText(
   for (const word of words) {
     const trial = current ? `${current} ${word}` : word;
     const width = measureTextWidth(null, trial, fontSize);
-    if (width <= maxWidth || !current) {
+    if (width <= safeWidth || !current) {
       current = trial;
     } else {
       lines.push(current);

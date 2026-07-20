@@ -1,6 +1,7 @@
 @page {
   size: letter portrait;
-  margin: 0;
+  /* Match typical iOS / AirPrint non-printable inset so content is not clipped. */
+  margin: 0.35in;
 }
 
 /* Screen: hide the dedicated print worksheet (shown only in @media print). */
@@ -61,24 +62,24 @@
   }
 
   .worksheet-page {
-    width: 8.5in !important;
-    height: 11in !important;
-    max-width: none !important;
-    aspect-ratio: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100% !important;
+    aspect-ratio: 8.5 / 11;
     margin: 0 auto !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     page-break-after: avoid;
     page-break-inside: avoid;
   }
 
   .worksheet-page svg {
-    width: 8.5in !important;
-    height: 11in !important;
+    width: 100% !important;
+    height: 100% !important;
     display: block !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
   .worksheet-page svg path,

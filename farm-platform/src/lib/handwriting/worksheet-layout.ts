@@ -4,6 +4,8 @@ import { fontRowMetrics, wrapText } from "@/lib/handwriting/glyph-render";
 export const PAGE_WIDTH_PT = 612;
 export const PAGE_HEIGHT_PT = 792;
 export const PAGE_MARGIN_PT = 36;
+/** Extra inset for mobile/printer non-printable areas when generating print layout. */
+export const PRINT_MARGIN_PT = 54;
 export const HEADER_HEIGHT_PT = 44;
 
 export const MIN_FONT_PT = 28;
@@ -35,6 +37,7 @@ export interface BuildWorksheetLayoutInput {
   fontSize: number;
   autoFill: boolean;
   showSolidModel: boolean;
+  pageMarginPt?: number;
 }
 
 interface LayoutDraft {
@@ -52,9 +55,10 @@ interface LayoutDraft {
 }
 
 function buildLayoutDraft(font: null, input: BuildWorksheetLayoutInput): LayoutDraft {
-  const contentWidth = PAGE_WIDTH_PT - PAGE_MARGIN_PT * 2;
-  const contentBottom = PAGE_HEIGHT_PT - PAGE_MARGIN_PT;
-  const contentTop = PAGE_MARGIN_PT + HEADER_HEIGHT_PT;
+  const margin = input.pageMarginPt ?? PAGE_MARGIN_PT;
+  const contentWidth = PAGE_WIDTH_PT - margin * 2;
+  const contentBottom = PAGE_HEIGHT_PT - margin;
+  const contentTop = margin + HEADER_HEIGHT_PT;
 
   const wrappedLines = wrapText(font, input.text, input.fontSize, contentWidth);
   const metrics = fontRowMetrics(font, input.fontSize);
@@ -75,7 +79,7 @@ function buildLayoutDraft(font: null, input: BuildWorksheetLayoutInput): LayoutD
       rowHeight,
       fontSize: input.fontSize,
       contentWidth,
-      margin: PAGE_MARGIN_PT,
+      margin,
       baselineOffset,
       midlineOffset,
       topLineOffset,
@@ -118,7 +122,7 @@ function buildLayoutDraft(font: null, input: BuildWorksheetLayoutInput): LayoutD
     rowHeight,
     fontSize: input.fontSize,
     contentWidth,
-    margin: PAGE_MARGIN_PT,
+    margin,
     baselineOffset,
     midlineOffset,
     topLineOffset,
@@ -130,7 +134,8 @@ function buildLayoutDraft(font: null, input: BuildWorksheetLayoutInput): LayoutD
 
 /** Pick the largest font size that still fills the page with minimal bottom slack. */
 function fitFontSizeToPage(font: null, input: BuildWorksheetLayoutInput): number {
-  const contentBottom = PAGE_HEIGHT_PT - PAGE_MARGIN_PT;
+  const margin = input.pageMarginPt ?? PAGE_MARGIN_PT;
+  const contentBottom = PAGE_HEIGHT_PT - margin;
   let bestSize = input.fontSize;
   let bestSlack = Infinity;
 

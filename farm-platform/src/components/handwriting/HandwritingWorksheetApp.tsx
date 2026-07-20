@@ -5,7 +5,7 @@ import { EB_Garamond } from "next/font/google";
 import WorksheetPreview, { useHandwritingFont } from "@/components/handwriting/WorksheetPreview";
 import "@/components/handwriting/handwriting-print.css";
 import { PROVENCE, PARCHMENT_TEXTURE } from "@/lib/family-dashboard/dashboard-tokens";
-import { buildWorksheetLayout, MAX_FONT_PT, MIN_FONT_PT } from "@/lib/handwriting/worksheet-layout";
+import { buildWorksheetLayout, MAX_FONT_PT, MIN_FONT_PT, PRINT_MARGIN_PT } from "@/lib/handwriting/worksheet-layout";
 
 const serif = EB_Garamond({
   subsets: ["latin"],
@@ -192,6 +192,7 @@ export default function HandwritingWorksheetApp() {
       fontSize,
       autoFill: true,
       showSolidModel,
+      pageMarginPt: PRINT_MARGIN_PT,
     });
   }, [ready, text, fontSize, showSolidModel]);
 

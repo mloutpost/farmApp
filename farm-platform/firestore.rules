@@ -11,6 +11,17 @@ service cloud.firestore {
     match /users/{userId}/farm/data {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    // Liturgical-year daily entries (one document per YYYY-MM-DD).
+    // Written by the in-app feed page and the import-liturgical-email script
+    // (the script uses firebase-admin which bypasses these rules).
+    match /users/{userId}/liturgicalYear/{date} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Family-dashboard configuration (e.g. the chosen Gmail source for the
+    // Liturgical Year wizard). Each user reads and writes their own.
+    match /users/{userId}/familyDashboard/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
     // Demo farm: anyone can read (for new users to try). Authenticated users can write (to save demo).
     match /demo/farm {
       allow read: if true;

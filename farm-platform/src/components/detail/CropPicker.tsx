@@ -16,10 +16,20 @@ interface CropPickerProps {
   catalogId?: string;
   categories?: CropCategory[];
   placeholder?: string;
+  /** Light “paper” surfaces (e.g. Beth’s Page): high-contrast text, warm dropdown. */
+  variant?: "default" | "paper";
   onChange: (crop: string, entry: CropEntry | null) => void;
 }
 
-export default function CropPicker({ value, catalogId, categories, placeholder, onChange }: CropPickerProps) {
+export default function CropPicker({
+  value,
+  catalogId,
+  categories,
+  placeholder,
+  variant = "default",
+  onChange,
+}: CropPickerProps) {
+  const paper = variant === "paper";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightIdx, setHighlightIdx] = useState(0);
@@ -141,20 +151,42 @@ export default function CropPicker({ value, catalogId, categories, placeholder, 
         autoComplete="off"
         autoCorrect="off"
         spellCheck={false}
-        className="w-full bg-transparent text-xs text-text-primary placeholder:text-text-muted outline-none min-w-0"
+        className={
+          paper
+            ? "w-full min-h-[44px] rounded-md border border-amber-900/30 bg-white/90 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 outline-none ring-amber-900/20 focus:ring-2 min-w-0 font-[family-name:var(--font-beth-serif,ui-serif,Georgia,serif)]"
+            : "w-full bg-transparent text-xs text-text-primary placeholder:text-text-muted outline-none min-w-0"
+        }
       />
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 w-80 max-h-80 overflow-y-auto rounded-lg border border-border bg-bg-elevated shadow-xl">
+        <div
+          className={
+            paper
+              ? "absolute left-0 top-full mt-1 z-50 w-80 max-h-80 overflow-y-auto rounded-lg border border-amber-900/25 bg-[#fffdf8] text-stone-900 shadow-lg"
+              : "absolute left-0 top-full mt-1 z-50 w-80 max-h-80 overflow-y-auto rounded-lg border border-border bg-bg-elevated shadow-xl"
+          }
+        >
           {flatList.length === 0 && (
-            <div className="px-3 py-4 text-xs text-text-muted text-center">
+            <div
+              className={
+                paper
+                  ? "px-3 py-4 text-xs text-stone-600 text-center"
+                  : "px-3 py-4 text-xs text-text-muted text-center"
+              }
+            >
               No crops found. Type a name to search or enter a custom crop.
             </div>
           )}
 
           {Array.from(grouped.entries()).map(([cat, entries]) => (
             <div key={cat}>
-              <div className="sticky top-0 bg-bg-elevated/95 backdrop-blur px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-b border-border/50">
+              <div
+                className={
+                  paper
+                    ? "sticky top-0 bg-[#faf6ef] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-amber-950/70 border-b border-amber-900/15"
+                    : "sticky top-0 bg-bg-elevated/95 backdrop-blur px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-b border-border/50"
+                }
+              >
                 {CROP_CATEGORIES[cat]}
               </div>
               {entries.map((entry) => {
@@ -162,29 +194,61 @@ export default function CropPicker({ value, catalogId, categories, placeholder, 
                 return (
                   <button
                     key={entry.id}
-                    ref={(el) => { itemRefs.current[idx] = el; }}
+                    ref={(el) => {
+                      itemRefs.current[idx] = el;
+                    }}
                     onClick={() => handleSelect(entry)}
-                    className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors ${
-                      idx === highlightIdx
-                        ? "bg-accent/10 text-accent"
-                        : "text-text-primary hover:bg-bg-surface"
-                    }`}
+                    className={
+                      paper
+                        ? `w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors font-[family-name:var(--font-beth-serif,ui-serif,Georgia,serif)] ${
+                            idx === highlightIdx
+                              ? "bg-amber-900/12 text-amber-950"
+                              : "text-stone-900 hover:bg-amber-900/8"
+                          }`
+                        : `w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors ${
+                            idx === highlightIdx
+                              ? "bg-accent/10 text-accent"
+                              : "text-text-primary hover:bg-bg-surface"
+                          }`
+                    }
                   >
                     <div className="min-w-0">
                       <div className="text-xs font-medium truncate">{entry.name}</div>
                       {entry.botanical && (
-                        <div className="text-[10px] text-text-muted italic truncate">{entry.botanical}</div>
+                        <div
+                          className={
+                            paper
+                              ? "text-[10px] text-stone-500 italic truncate"
+                              : "text-[10px] text-text-muted italic truncate"
+                          }
+                        >
+                          {entry.botanical}
+                        </div>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] text-text-secondary">{dtmLabel(entry)}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        entry.frostTolerance === "hardy"
-                          ? "bg-blue-500/20 text-blue-400"
-                          : entry.frostTolerance === "semi-hardy"
-                          ? "bg-yellow-500/20 text-yellow-400"
-                          : "bg-red-500/20 text-red-400"
-                      }`}>
+                      <span
+                        className={
+                          paper ? "text-[10px] text-stone-600" : "text-[10px] text-text-secondary"
+                        }
+                      >
+                        {dtmLabel(entry)}
+                      </span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          entry.frostTolerance === "hardy"
+                            ? paper
+                              ? "bg-sky-100 text-sky-900"
+                              : "bg-blue-500/20 text-blue-400"
+                            : entry.frostTolerance === "semi-hardy"
+                              ? paper
+                                ? "bg-amber-100 text-amber-950"
+                                : "bg-yellow-500/20 text-yellow-400"
+                              : paper
+                                ? "bg-red-100 text-red-900"
+                                : "bg-red-500/20 text-red-400"
+                        }`}
+                      >
                         {entry.frostTolerance}
                       </span>
                     </div>
@@ -201,7 +265,11 @@ export default function CropPicker({ value, catalogId, categories, placeholder, 
                 setQuery("");
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2.5 text-xs text-accent hover:bg-bg-surface border-t border-border/50"
+              className={
+                paper
+                  ? "w-full text-left px-3 py-2.5 text-xs text-amber-950 hover:bg-amber-900/10 border-t border-amber-900/15 font-[family-name:var(--font-beth-serif,ui-serif,Georgia,serif)]"
+                  : "w-full text-left px-3 py-2.5 text-xs text-accent hover:bg-bg-surface border-t border-border/50"
+              }
             >
               Use custom: &quot;{query.trim()}&quot;
             </button>

@@ -1,0 +1,41 @@
+@page {
+  size: letter portrait;
+  margin: 0;
+}
+
+@media print {
+  body {
+    margin: 0;
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .worksheet-print-root,
+  .worksheet-print-root * {
+    visibility: visible;
+  }
+
+  .worksheet-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: white;
+  }
+
+  .worksheet-page {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    page-break-after: avoid;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

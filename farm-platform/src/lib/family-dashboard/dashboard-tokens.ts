@@ -1,5 +1,5 @@
 /**
- * Shared palette + textures for family-dashboard routes (TV board, travel, rosary).
+ * Shared palette + textures for family-dashboard routes (TV board, travel).
  */
 
 export const PROVENCE = {

@@ -546,3 +546,25 @@ export function requestGoogleGmailAccessToken(
     GMAIL_ACCOUNT_CHOOSER_PROMPT
   );
 }
+
+/** Best-effort Google account email for the account that granted `accessToken`. */
+export async function fetchGoogleAccountEmail(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { email?: string };
+      const email = json.email?.trim();
+      if (email) return email;
+    }
+    const info = await fetch(
+      `https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${encodeURIComponent(accessToken)}`
+    );
+    if (!info.ok) return null;
+    const data = (await info.json()) as { email?: string };
+    return data.email?.trim() || null;
+  } catch {
+    return null;
+  }
+}

@@ -19,9 +19,12 @@ interface State {
   /** Whether the user has previously connected on this browser. Used to
    *  decide whether to attempt silent token refresh on the morning load. */
   hasConsented: boolean;
+  /** Google account that granted the Calendar scope on this browser. */
+  emailAddress: string | null;
   setEvents: (events: GoogleCalendarEvent[]) => void;
   setStatus: (status: GoogleConnectionState, error?: string | null) => void;
   setHasConsented: (consented: boolean) => void;
+  setEmailAddress: (email: string | null) => void;
   setTokenExpiresAt: (expiresAt: number | null) => void;
   reset: () => void;
 }
@@ -35,10 +38,12 @@ export const useGoogleCalendarStore = create<State>()(
       status: "idle",
       error: null,
       hasConsented: false,
+      emailAddress: null,
       setEvents: (events) =>
         set({ events, lastFetchedAt: new Date().toISOString(), status: "connected", error: null }),
       setStatus: (status, error = null) => set({ status, error }),
       setHasConsented: (hasConsented) => set({ hasConsented }),
+      setEmailAddress: (emailAddress) => set({ emailAddress }),
       setTokenExpiresAt: (tokenExpiresAt) => set({ tokenExpiresAt }),
       reset: () =>
         set({
@@ -48,6 +53,7 @@ export const useGoogleCalendarStore = create<State>()(
           status: "idle",
           error: null,
           hasConsented: false,
+          emailAddress: null,
         }),
     }),
     {
@@ -57,6 +63,7 @@ export const useGoogleCalendarStore = create<State>()(
         events: s.events,
         lastFetchedAt: s.lastFetchedAt,
         hasConsented: s.hasConsented,
+        emailAddress: s.emailAddress,
       }),
     }
   )

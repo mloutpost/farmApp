@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGoogleCalendarStore } from "@/store/google-calendar-store";
 import {
   GOOGLE_CALENDAR_SCOPE,
+  fetchGoogleAccountEmail,
   getGoogleClientId,
   prefetchGoogleTokenClient,
   requestGoogleAccessToken,
@@ -52,6 +53,7 @@ export function useTodayEvents(): UseTodayEventsResult {
   const setEvents = useGoogleCalendarStore((s) => s.setEvents);
   const setStatus = useGoogleCalendarStore((s) => s.setStatus);
   const setHasConsented = useGoogleCalendarStore((s) => s.setHasConsented);
+  const setEmailAddress = useGoogleCalendarStore((s) => s.setEmailAddress);
   const setTokenExpiresAt = useGoogleCalendarStore((s) => s.setTokenExpiresAt);
   const reset = useGoogleCalendarStore((s) => s.reset);
 
@@ -96,6 +98,14 @@ export function useTodayEvents(): UseTodayEventsResult {
   /** Refresh the access token silently. Used by the auto-connect / interval
    *  / midnight effects — never called from a user gesture so it's safe to
    *  await freely. */
+  const rememberAccountEmail = useCallback(
+    async (accessToken: string) => {
+      const email = await fetchGoogleAccountEmail(accessToken);
+      if (email) setEmailAddress(email);
+    },
+    [setEmailAddress]
+  );
+
   const ensureFreshTokenSilent = useCallback(async (): Promise<string> => {
     const now = Date.now();
     const cachedExpiry = expiresAtRef.current ?? 0;
@@ -110,8 +120,9 @@ export function useTodayEvents(): UseTodayEventsResult {
     expiresAtRef.current = result.expiresAt;
     setTokenExpiresAt(result.expiresAt);
     setHasConsented(true);
+    void rememberAccountEmail(result.accessToken);
     return result.accessToken;
-  }, [setHasConsented, setTokenExpiresAt]);
+  }, [rememberAccountEmail, setHasConsented, setTokenExpiresAt]);
 
   /**
    * Silent failures fall into two buckets:
@@ -192,6 +203,7 @@ export function useTodayEvents(): UseTodayEventsResult {
         expiresAtRef.current = result.expiresAt;
         setTokenExpiresAt(result.expiresAt);
         setHasConsented(true);
+        void rememberAccountEmail(result.accessToken);
         const events = await fetchTodayEvents(result.accessToken);
         setEvents(events);
       })
@@ -211,7 +223,7 @@ export function useTodayEvents(): UseTodayEventsResult {
       .finally(() => {
         inFlightRef.current = false;
       });
-  }, [configured, setEvents, setHasConsented, setStatus, setTokenExpiresAt]);
+  }, [configured, rememberAccountEmail, setEvents, setHasConsented, setStatus, setTokenExpiresAt]);
 
   const refresh = useCallback(async () => {
     if (!configured || !hasConsented) return;

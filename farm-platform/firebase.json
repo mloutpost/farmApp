@@ -14,6 +14,7 @@
       }
     ],
     "rewrites": [
+      { "source": "/family-dashboard/handwriting", "destination": "/family-dashboard/handwriting.html" },
       { "source": "/family-dashboard/travel-planning", "destination": "/family-dashboard/travel-planning.html" },
       { "source": "/family-dashboard/connect-gmail", "destination": "/family-dashboard/connect-gmail.html" },
       { "source": "/family-dashboard/feed", "destination": "/family-dashboard/feed.html" },

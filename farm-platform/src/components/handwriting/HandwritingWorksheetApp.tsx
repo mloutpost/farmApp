@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { EB_Garamond } from "next/font/google";
 import WorksheetPreview, { useHandwritingFont } from "@/components/handwriting/WorksheetPreview";
 import "@/components/handwriting/handwriting-print.css";
 import { PROVENCE, PARCHMENT_TEXTURE } from "@/lib/family-dashboard/dashboard-tokens";
-import { buildWorksheetLayout } from "@/lib/handwriting/worksheet-layout";
+import { buildWorksheetLayout, MAX_FONT_PT, MIN_FONT_PT } from "@/lib/handwriting/worksheet-layout";
 
 const serif = EB_Garamond({
   subsets: ["latin"],
@@ -17,8 +16,8 @@ const serif = EB_Garamond({
 });
 
 const DEFAULT_TEXT = "the quick brown fox jumped over the lazy dog";
-const MIN_FONT = 28;
-const MAX_FONT = 72;
+const MIN_FONT = MIN_FONT_PT;
+const MAX_FONT = MAX_FONT_PT;
 
 const PANEL_BG = "#fdf8ee";
 const PANEL_BORDER = "rgba(31, 58, 85, 0.22)";
@@ -117,6 +116,7 @@ function SliderCard({
   step,
   onChange,
   footer,
+  disabled = false,
 }: {
   label: string;
   value: number;
@@ -125,11 +125,16 @@ function SliderCard({
   step: number;
   onChange: (value: number) => void;
   footer?: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <div
       className="rounded-sm border px-3 py-3"
-      style={{ borderColor: PANEL_BORDER, background: CARD_BG }}
+      style={{
+        borderColor: PANEL_BORDER,
+        background: CARD_BG,
+        opacity: disabled ? 0.85 : 1,
+      }}
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-sm font-semibold" style={{ color: LABEL_COLOR }}>
@@ -145,8 +150,9 @@ function SliderCard({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-3 h-8 w-full touch-manipulation accent-[#1f3a55]"
+        className="mt-3 h-8 w-full touch-manipulation accent-[#1f3a55] disabled:opacity-50"
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={value}
@@ -216,13 +222,6 @@ export default function HandwritingWorksheetApp() {
             <p className="mt-2 text-sm leading-relaxed" style={{ color: TEXT_MUTED }}>
               Type copywork text, preview dotted tracing lines, and print a full letter-size page.
             </p>
-            <Link
-              href="/family-dashboard"
-              className="mt-3 inline-flex min-h-[44px] items-center text-sm font-semibold uppercase tracking-[0.18em] underline underline-offset-4 hover:opacity-80"
-              style={{ color: PROVENCE.toileBlue }}
-            >
-              ← TV board
-            </Link>
           </header>
 
           <div className="space-y-3">
@@ -248,14 +247,18 @@ export default function HandwritingWorksheetApp() {
             </TextFieldCard>
 
             <SliderCard
-              label="Letter size"
-              value={fontSize}
+              label={autoFill ? "Letter size (auto)" : "Letter size"}
+              value={autoFill ? (layout?.fontSize ?? fontSize) : fontSize}
               min={MIN_FONT}
               max={MAX_FONT}
               step={2}
               onChange={setFontSize}
+              disabled={autoFill}
               footer={
-                <p className="text-xs tabular-nums" style={{ color: TEXT_MUTED }}>
+                <p className="text-xs leading-snug" style={{ color: TEXT_MUTED }}>
+                  {autoFill
+                    ? "Scales up to fill the page when Fill page is on. "
+                    : null}
                   {rowCount} row{rowCount === 1 ? "" : "s"} on page
                 </p>
               }

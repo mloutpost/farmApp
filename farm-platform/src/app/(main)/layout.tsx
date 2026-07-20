@@ -26,8 +26,18 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   useFarmSync();
   const isMapPage = pathname === "/";
   const isOpsHud = pathname === "/ops";
+  const isHandwriting = pathname === "/family-dashboard/handwriting";
   const isFamilyDashboard =
-    pathname === "/family-dashboard" || pathname.startsWith("/family-dashboard/");
+    pathname === "/family-dashboard" ||
+    (pathname.startsWith("/family-dashboard/") && !isHandwriting);
+
+  if (isHandwriting) {
+    return (
+      <div className="min-h-screen w-full overflow-x-hidden">
+        {children}
+      </div>
+    );
+  }
 
   if (isFamilyDashboard) {
     // Let the dashboard shell scroll as a unit when liturgy/events exceed the

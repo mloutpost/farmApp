@@ -1,12 +1,19 @@
 @page {
-  size: letter portrait;
+  size: 8.5in 11in;
   margin: 0;
 }
 
 @media print {
+  html,
   body {
-    margin: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 8.5in;
+    height: 11in;
+    overflow: hidden;
     background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   body * {
@@ -19,20 +26,42 @@
   }
 
   .worksheet-print-root {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 0;
-    margin: 0;
-    background: white;
+    position: fixed;
+    inset: 0;
+    width: 8.5in;
+    height: 11in;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    background-image: none !important;
+  }
+
+  .worksheet-print-root > div {
+    width: 8.5in !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    justify-content: flex-start !important;
   }
 
   .worksheet-page {
+    width: 8.5in !important;
+    height: 11in !important;
+    max-width: none !important;
+    aspect-ratio: auto !important;
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
     page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+
+  .worksheet-page svg {
+    width: 8.5in !important;
+    height: 11in !important;
+    display: block;
   }
 
   .no-print {

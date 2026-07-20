@@ -6,6 +6,9 @@ export const PAGE_HEIGHT_PT = 792;
 export const PAGE_MARGIN_PT = 36;
 export const HEADER_HEIGHT_PT = 44;
 
+export const MIN_FONT_PT = 28;
+export const MAX_FONT_PT = 72;
+
 export interface WorksheetRow {
   text: string;
   y: number;
@@ -34,10 +37,21 @@ export interface BuildWorksheetLayoutInput {
   showSolidModel: boolean;
 }
 
-export function buildWorksheetLayout(
-  font: null,
-  input: BuildWorksheetLayoutInput
-): WorksheetLayout {
+interface LayoutDraft {
+  rows: WorksheetRow[];
+  rowHeight: number;
+  fontSize: number;
+  contentWidth: number;
+  margin: number;
+  baselineOffset: number;
+  midlineOffset: number;
+  topLineOffset: number;
+  descenderLineOffset: number;
+  wrappedLineCount: number;
+  contentEndY: number;
+}
+
+function buildLayoutDraft(font: null, input: BuildWorksheetLayoutInput): LayoutDraft {
   const contentWidth = PAGE_WIDTH_PT - PAGE_MARGIN_PT * 2;
   const contentBottom = PAGE_HEIGHT_PT - PAGE_MARGIN_PT;
   const contentTop = PAGE_MARGIN_PT + HEADER_HEIGHT_PT;
@@ -61,14 +75,13 @@ export function buildWorksheetLayout(
       rowHeight,
       fontSize: input.fontSize,
       contentWidth,
-      pageWidth: PAGE_WIDTH_PT,
-      pageHeight: PAGE_HEIGHT_PT,
       margin: PAGE_MARGIN_PT,
       baselineOffset,
       midlineOffset,
       topLineOffset,
       descenderLineOffset,
       wrappedLineCount: 0,
+      contentEndY: contentTop,
     };
   }
 
@@ -94,13 +107,61 @@ export function buildWorksheetLayout(
     rowHeight,
     fontSize: input.fontSize,
     contentWidth,
-    pageWidth: PAGE_WIDTH_PT,
-    pageHeight: PAGE_HEIGHT_PT,
     margin: PAGE_MARGIN_PT,
     baselineOffset,
     midlineOffset,
     topLineOffset,
     descenderLineOffset,
     wrappedLineCount: wrappedLines.length,
+    contentEndY: y,
   };
+}
+
+/** Pick the largest font size that still fills the page with minimal bottom slack. */
+function fitFontSizeToPage(font: null, input: BuildWorksheetLayoutInput): number {
+  const contentBottom = PAGE_HEIGHT_PT - PAGE_MARGIN_PT;
+  let bestSize = input.fontSize;
+  let bestSlack = Infinity;
+
+  for (let fontSize = MIN_FONT_PT; fontSize <= MAX_FONT_PT; fontSize += 1) {
+    const draft = buildLayoutDraft(font, { ...input, fontSize });
+    if (draft.rows.length === 0) continue;
+
+    const slack = contentBottom - draft.contentEndY;
+    if (slack >= 0 && slack < bestSlack) {
+      bestSlack = slack;
+      bestSize = fontSize;
+    }
+  }
+
+  return bestSize;
+}
+
+function toWorksheetLayout(draft: LayoutDraft): WorksheetLayout {
+  return {
+    rows: draft.rows,
+    rowHeight: draft.rowHeight,
+    fontSize: draft.fontSize,
+    contentWidth: draft.contentWidth,
+    pageWidth: PAGE_WIDTH_PT,
+    pageHeight: PAGE_HEIGHT_PT,
+    margin: draft.margin,
+    baselineOffset: draft.baselineOffset,
+    midlineOffset: draft.midlineOffset,
+    topLineOffset: draft.topLineOffset,
+    descenderLineOffset: draft.descenderLineOffset,
+    wrappedLineCount: draft.wrappedLineCount,
+  };
+}
+
+export function buildWorksheetLayout(
+  font: null,
+  input: BuildWorksheetLayoutInput
+): WorksheetLayout {
+  const effectiveFontSize =
+    input.autoFill && input.text.trim()
+      ? fitFontSizeToPage(font, input)
+      : input.fontSize;
+
+  return toWorksheetLayout(buildLayoutDraft(font, { ...input, fontSize: effectiveFontSize }));
 }
